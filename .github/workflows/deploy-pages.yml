@@ -1,0 +1,69 @@
+name: Deploy to GitHub Pages
+
+# Builds the web app and publishes it to GitHub Pages on every push to main.
+# Only the source is committed - build/ stays gitignored and is produced here.
+
+on:
+  push:
+    branches: [main]
+  # Lets you re-deploy by hand from the Actions tab without pushing anything.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# If two pushes land close together, let the newer one win rather than
+# racing to publish.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      # The generated Hive adapters are committed, but regenerate them here so
+      # a stale checked-in copy can never be what gets shipped.
+      - run: dart run build_runner build
+
+      - run: flutter analyze
+
+      - run: flutter test
+
+      # A project site is served from https://<user>.github.io/<repo>/, not
+      # from the domain root, so every asset path has to be prefixed with the
+      # repo name. Without this the page loads and then renders blank.
+      - name: Build web
+        run: flutter build web --release --base-href "/${{ github.event.repository.name }}/"
+
+      # Harmless with the artifact-based deploy below, which does not run
+      # Jekyll at all - but it keeps things working if you ever switch to
+      # publishing from a branch, where Jekyll would skip files beginning
+      # with an underscore.
+      - name: Add .nojekyll
+        run: touch build/web/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
