@@ -158,7 +158,10 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
       // Side by side, like the entry tabs: the question on the left, the
       // answer on the right.
       return BrutalPageWidth(
-        padding: EdgeInsets.all(skin.sizes.gap),
+        padding: EdgeInsets.symmetric(
+          horizontal: skin.sizes.pageGutter,
+          vertical: skin.sizes.gap,
+        ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -186,7 +189,7 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
         controller: _scrollController,
         child: BrutalPageWidth(
           padding: EdgeInsets.symmetric(
-            horizontal: skin.sizes.gap,
+            horizontal: skin.sizes.pageGutter,
             vertical: skin.sizes.gapLarge,
           ),
           child: Column(

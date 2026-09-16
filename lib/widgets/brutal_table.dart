@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 import '../theme/brutal_skin.dart';
@@ -115,11 +117,12 @@ class _BrutalTableState extends State<BrutalTable> {
     // The edge padding inside the header and each row has to be counted, or
     // the cells add up to more room than the table actually offers them.
     final edge = skin.sizes.gapSmall;
-    final totalWidth =
-        widget.columns.fold<double>(
-          0,
-          (sum, column) => sum + column.width * columnScale,
-        ) +
+    final dataWidth = widget.columns.fold<double>(
+      0,
+      (sum, column) => sum + column.width * columnScale,
+    );
+    final minimumWidth =
+        dataWidth +
         actionsWidth +
         edge * 2 +
         // Room for the bar that marks the row being edited. A border takes
@@ -127,6 +130,33 @@ class _BrutalTableState extends State<BrutalTable> {
         // be too narrow for its cells.
         _highlightBarWidth;
 
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // The column widths are minimums. On a wider window the spare room is
+        // shared out between the data columns in proportion to their size,
+        // so the table spans the whole block instead of stopping part way
+        // across. The buttons column keeps its width - it only holds buttons.
+        final available = constraints.hasBoundedWidth
+            ? constraints.maxWidth
+            : minimumWidth;
+        final spare = max(0.0, available - minimumWidth);
+        final widths = <double>[
+          for (final column in widget.columns)
+            column.width * columnScale +
+                spare * (column.width * columnScale / dataWidth),
+        ];
+        return _table(skin, widths, actionsWidth, edge, minimumWidth + spare);
+      },
+    );
+  }
+
+  Widget _table(
+    BrutalSkinData skin,
+    List<double> widths,
+    double actionsWidth,
+    double edge,
+    double totalWidth,
+  ) {
     return Container(
       decoration: BoxDecoration(border: widget.bordered ? skin.border : null),
       child: Scrollbar(
@@ -143,16 +173,9 @@ class _BrutalTableState extends State<BrutalTable> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
-                    _header(skin, columnScale, actionsWidth, edge),
+                    _header(skin, widths, actionsWidth, edge),
                     for (var i = 0; i < widget.rows.length; i++)
-                      _row(
-                        skin,
-                        i,
-                        widget.rows[i],
-                        columnScale,
-                        actionsWidth,
-                        edge,
-                      ),
+                      _row(skin, i, widget.rows[i], widths, actionsWidth, edge),
                   ],
                 ),
               ),
@@ -165,7 +188,7 @@ class _BrutalTableState extends State<BrutalTable> {
 
   Widget _header(
     BrutalSkinData skin,
-    double scale,
+    List<double> widths,
     double actionsWidth,
     double edge,
   ) {
@@ -177,14 +200,14 @@ class _BrutalTableState extends State<BrutalTable> {
       ),
       child: Row(
         children: <Widget>[
-          for (final column in widget.columns)
+          for (var i = 0; i < widget.columns.length; i++)
             SizedBox(
-              width: column.width * scale,
+              width: widths[i],
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 6),
                 child: Text(
-                  column.label,
-                  textAlign: column.alignRight
+                  widget.columns[i].label,
+                  textAlign: widget.columns[i].alignRight
                       ? TextAlign.right
                       : TextAlign.left,
                   style: skin.text.tableHeader,
@@ -210,7 +233,7 @@ class _BrutalTableState extends State<BrutalTable> {
     BrutalSkinData skin,
     int index,
     BrutalRowData row,
-    double scale,
+    List<double> widths,
     double actionsWidth,
     double edge,
   ) {
@@ -235,7 +258,7 @@ class _BrutalTableState extends State<BrutalTable> {
         children: <Widget>[
           for (var i = 0; i < widget.columns.length; i++)
             SizedBox(
-              width: widget.columns[i].width * scale,
+              width: widths[i],
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 6),
                 child: Text(

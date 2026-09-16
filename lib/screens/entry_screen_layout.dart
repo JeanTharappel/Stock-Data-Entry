@@ -45,7 +45,7 @@ class EntryScreenLayout extends StatelessWidget {
         controller: scrollController,
         child: BrutalPageWidth(
           padding: EdgeInsets.symmetric(
-            horizontal: skin.sizes.gap,
+            horizontal: skin.sizes.pageGutter,
             vertical: skin.sizes.gapLarge,
           ),
           child: Column(
@@ -70,7 +70,10 @@ class EntryScreenLayout extends StatelessWidget {
 
   Widget _compact(BrutalSkinData skin) {
     return BrutalPageWidth(
-      padding: EdgeInsets.all(skin.sizes.gap),
+      padding: EdgeInsets.symmetric(
+        horizontal: skin.sizes.pageGutter,
+        vertical: skin.sizes.gap,
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -129,7 +132,8 @@ class BrutalPageWidth extends StatelessWidget {
   Widget build(BuildContext context) {
     final skin = BrutalSkin.of(context);
     return Padding(
-      padding: padding ?? EdgeInsets.symmetric(horizontal: skin.sizes.gap),
+      padding:
+          padding ?? EdgeInsets.symmetric(horizontal: skin.sizes.pageGutter),
       child: Center(
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: skin.sizes.maxContentWidth),

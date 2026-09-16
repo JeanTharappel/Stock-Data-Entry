@@ -187,7 +187,10 @@ class _InquiryResultsPageState extends State<InquiryResultsPage> {
       body: SafeArea(
         child: compact
             ? BrutalPageWidth(
-                padding: EdgeInsets.all(skin.sizes.gap),
+                padding: EdgeInsets.symmetric(
+                  horizontal: skin.sizes.pageGutter,
+                  vertical: skin.sizes.gap,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
@@ -202,7 +205,7 @@ class _InquiryResultsPageState extends State<InquiryResultsPage> {
                   controller: _scrollController,
                   child: BrutalPageWidth(
                     padding: EdgeInsets.symmetric(
-                      horizontal: skin.sizes.gap,
+                      horizontal: skin.sizes.pageGutter,
                       vertical: skin.sizes.gapLarge,
                     ),
                     child: Column(

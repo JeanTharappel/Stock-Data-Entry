@@ -148,6 +148,7 @@ class BrutalMetrics {
     required this.gapLarge,
     required this.gapSection,
     required this.maxContentWidth,
+    required this.pageGutter,
     required this.fieldWidth,
     required this.datePartWidth,
     required this.titleBarPadding,
@@ -166,6 +167,7 @@ class BrutalMetrics {
       gapLarge = 32,
       gapSection = 48,
       maxContentWidth = 1120,
+      pageGutter = 40,
       fieldWidth = 340,
       datePartWidth = 150,
       titleBarPadding = 12,
@@ -183,6 +185,7 @@ class BrutalMetrics {
       gapLarge = 14,
       gapSection = 18,
       maxContentWidth = 1700,
+      pageGutter = 28,
       fieldWidth = 240,
       datePartWidth = 104,
       titleBarPadding = 6,
@@ -199,6 +202,10 @@ class BrutalMetrics {
   final double gapLarge;
   final double gapSection;
   final double maxContentWidth;
+
+  /// Empty space down the left and right of every page, so nothing runs up
+  /// against the edge of the window.
+  final double pageGutter;
 
   /// Width of a single form field, so fields pack two or three to a row.
   final double fieldWidth;

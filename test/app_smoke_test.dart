@@ -19,6 +19,7 @@ import 'package:stock_data_entry/screens/inquiry_screen.dart';
 import 'package:stock_data_entry/screens/price_range_screen.dart';
 import 'package:stock_data_entry/theme/brutal_skin.dart';
 import 'package:stock_data_entry/theme/brutal_theme.dart';
+import 'package:stock_data_entry/widgets/brutal_table.dart';
 import 'package:stock_data_entry/widgets/brutal_text_field.dart';
 import 'package:stock_data_entry/widgets/ddmmyy_field.dart';
 
@@ -817,6 +818,43 @@ void main() {
       find.textContaining('THERE ARE NO DIVIDEND RATES FOR ACME'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('a table with few columns still spans its whole block', (
+    tester,
+  ) async {
+    await seed(
+      tester,
+      prices: <PriceRange>[
+        PriceRange(
+          ccode: 'ITC',
+          entryDate: '310125',
+          lowVal: 400,
+          highVal: 451,
+        ),
+      ],
+    );
+    await pumpApp(tester, density: BrutalDensity.compact);
+    tester.view.physicalSize = const Size(1900, 900);
+    await settle(tester);
+
+    await search(tester, ccode: 'ITC', from: '010125', to: '311225');
+    await press(tester, find.text('SEE PRICE RANGES (1 FOUND)'));
+
+    // Three short columns used to leave the right half of the block empty,
+    // with the buttons stranded in the middle. The spare width is now shared
+    // out, which pushes the buttons column to the far side.
+    final table = tester.getRect(find.byType(BrutalTable));
+    final actions = tester.getTopLeft(find.text('ACTIONS'));
+    expect(actions.dx, greaterThan(table.left + table.width * 0.6));
+    expect(
+      tester.getTopRight(find.text('HIGH VALUE')).dx,
+      lessThan(actions.dx),
+    );
+
+    // And the page keeps clear of the window edges.
+    final skin = BrutalSkin.of(tester.element(find.byType(BrutalTable)));
+    expect(table.left, greaterThanOrEqualTo(skin.sizes.pageGutter));
   });
 
   testWidgets('importing a backup asks first and skips what is already saved', (

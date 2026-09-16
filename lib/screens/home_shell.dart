@@ -67,7 +67,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       color: skin.colors.fill,
       child: BrutalPageWidth(
         padding: EdgeInsets.symmetric(
-          horizontal: skin.sizes.gap,
+          horizontal: skin.sizes.pageGutter,
           vertical: skin.sizes.titleBarPadding,
         ),
         child: Wrap(
@@ -132,9 +132,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       // bottom border and the two read as one solid edge.
       child: BrutalPageWidth(
         padding: EdgeInsets.fromLTRB(
-          skin.sizes.gap,
+          skin.sizes.pageGutter,
           skin.sizes.gapSmall,
-          skin.sizes.gap,
+          skin.sizes.pageGutter,
           0,
         ),
         child: IntrinsicHeight(
