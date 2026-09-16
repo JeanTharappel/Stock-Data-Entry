@@ -2,14 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/app_settings.dart';
+import '../data/navigation.dart';
 import '../theme/brutal_skin.dart';
 import '../widgets/brutal_button.dart';
 import 'dividend_rate_screen.dart';
 import 'entry_screen_layout.dart';
+import 'inquiry_screen.dart';
 import 'price_range_screen.dart';
 
 /// The app frame: a title bar carrying the two display toggles, a row of tab
 /// buttons, and the active screen underneath.
+///
+/// The active tab lives in [homeTabProvider] rather than here, so the inquiry
+/// results can switch to an entry tab when EDIT is pressed.
 ///
 /// The screens live in an [IndexedStack], so switching tabs is an instant swap
 /// with no transition, and whatever was typed into the other form is still
@@ -22,16 +27,10 @@ class HomeShell extends ConsumerStatefulWidget {
 }
 
 class _HomeShellState extends ConsumerState<HomeShell> {
-  int _activeTab = 0;
-
-  static const List<String> _tabLabels = <String>[
-    'DIVIDEND RATE ENTRY',
-    'PRICE RANGE ENTRY',
-  ];
-
   @override
   Widget build(BuildContext context) {
     final skin = BrutalSkin.of(context);
+    final activeTab = ref.watch(homeTabProvider);
     return Scaffold(
       backgroundColor: skin.colors.page,
       body: SafeArea(
@@ -39,13 +38,15 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             _titleBar(skin),
-            _tabBar(skin),
+            _tabBar(skin, activeTab),
             Expanded(
               child: IndexedStack(
-                index: _activeTab,
+                // Children in the same order as HomeTab.values.
+                index: activeTab.index,
                 children: const <Widget>[
                   DividendRateScreen(),
                   PriceRangeScreen(),
+                  InquiryScreen(),
                 ],
               ),
             ),
@@ -111,11 +112,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     );
   }
 
-  /// A single row that never wraps: the two tabs share the width equally and
+  /// A single row that never wraps: the tabs share the width equally and
   /// stay side by side at any window size. IntrinsicHeight keeps them the same
   /// height if one label wraps onto two lines and the other does not, so the
   /// pair always reads as one strip.
-  Widget _tabBar(BrutalSkinData skin) {
+  Widget _tabBar(BrutalSkinData skin, HomeTab activeTab) {
     return Container(
       decoration: BoxDecoration(
         color: skin.colors.paper,
@@ -126,9 +127,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           ),
         ),
       ),
-      // Same horizontal geometry as the screen body below, so the gap between
-      // the two tabs sits directly above the gap between the two columns. No
-      // padding at the bottom, so the active tab's base bar lands on the bar's
+      // Same horizontal geometry as the screen body below, so the tab strip
+      // lines up with the edges of the page. No padding at the bottom, so the active tab's base bar lands on the bar's
       // bottom border and the two read as one solid edge.
       child: BrutalPageWidth(
         padding: EdgeInsets.fromLTRB(
@@ -141,17 +141,14 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              for (
-                var index = 0;
-                index < _tabLabels.length;
-                index++
-              ) ...<Widget>[
-                if (index > 0) SizedBox(width: skin.sizes.gap),
+              for (final tab in HomeTab.values) ...<Widget>[
+                if (tab.index > 0) SizedBox(width: skin.sizes.gap),
                 Expanded(
                   child: _TabButton(
-                    label: _tabLabels[index],
-                    selected: _activeTab == index,
-                    onPressed: () => setState(() => _activeTab = index),
+                    label: tab.label,
+                    selected: activeTab == tab,
+                    onPressed: () =>
+                        ref.read(homeTabProvider.notifier).show(tab),
                   ),
                 ),
               ],

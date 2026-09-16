@@ -5,8 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/ddmmyy.dart';
 import '../core/record_spec.dart';
 import '../core/validators.dart';
+import '../data/navigation.dart';
 import '../data/price_range_controller.dart';
 import '../export/export_service.dart';
+import '../import/import_service.dart';
 import '../models/price_range.dart';
 import '../theme/brutal_skin.dart';
 import '../theme/brutal_theme.dart';
@@ -17,7 +19,9 @@ import '../widgets/brutal_table.dart';
 import '../widgets/brutal_text_field.dart';
 import '../widgets/ddmmyy_field.dart';
 import '../widgets/export_section.dart';
+import '../widgets/import_section.dart';
 import 'entry_screen_layout.dart';
+import 'record_deletion.dart';
 
 /// Entry and management of PRICE-RANGE records.
 class PriceRangeScreen extends ConsumerStatefulWidget {
@@ -232,25 +236,9 @@ class _PriceRangeScreenState extends ConsumerState<PriceRangeScreen> {
   }
 
   Future<void> _confirmDelete(PriceRange record) async {
-    final confirmed = await showBrutalConfirm(
-      context: context,
-      title: 'DELETE THIS RECORD?',
-      message: 'ARE YOU SURE YOU WANT TO DELETE THIS RECORD?',
-      detail:
-          'COMPANY CODE: ${record.ccode}\n'
-          'DATE: ${spellOutDdmmyy(record.entryDate)}\n'
-          'LOW VALUE: ${record.lowVal}\n'
-          'HIGH VALUE: ${record.highVal}\n\n'
-          'THIS CANNOT BE UNDONE.',
-      confirmLabel: 'YES, DELETE IT',
-      cancelLabel: 'NO, KEEP IT',
-    );
-    if (!confirmed || !mounted) return;
-
-    final wasEditingThisRecord = _editingKey == record.key;
-    await ref.read(priceRangeControllerProvider.notifier).delete(record.key!);
-    if (!mounted) return;
-    if (wasEditingThisRecord) _clearForm();
+    // If this was the record in the form, the listener in build clears it.
+    final deleted = await confirmAndDeletePriceRange(context, ref, record);
+    if (!deleted || !mounted) return;
     setState(() {
       _statusKind = NoticeKind.success;
       _statusMessage = 'THE RECORD FOR ${record.ccode} HAS BEEN DELETED.';
@@ -263,6 +251,27 @@ class _PriceRangeScreenState extends ConsumerState<PriceRangeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // See DividendRateScreen.build - the two listeners do the same job here.
+    ref.listen<EditRequest?>(editRequestProvider, (_, request) {
+      if (request == null || request.tab != HomeTab.priceEntry) return;
+      final record = ref
+          .read(priceRangeControllerProvider)
+          .where((record) => record.key == request.key)
+          .firstOrNull;
+      if (record != null) _startEditing(record);
+    });
+
+    ref.listen<List<PriceRange>>(priceRangeControllerProvider, (_, records) {
+      if (!_isEditing || records.any((record) => record.key == _editingKey)) {
+        return;
+      }
+      _clearForm();
+      setState(() {
+        _statusKind = NoticeKind.info;
+        _statusMessage = 'THE RECORD YOU WERE CHANGING HAS BEEN DELETED.';
+      });
+    });
+
     final records = ref.watch(priceRangeControllerProvider);
     final highlighted = _editingKey == null
         ? null
@@ -276,6 +285,19 @@ class _PriceRangeScreenState extends ConsumerState<PriceRangeScreen> {
       export: ExportSection(
         recordCount: records.length,
         onExport: (format) => ExportService.exportPriceRanges(records, format),
+      ),
+      importSection: ImportSection(
+        prepare: (file) {
+          final read = ImportService.readPriceRanges(file);
+          final controller = ref.read(priceRangeControllerProvider.notifier);
+          final fresh = controller.notYetSaved(read.records);
+          return ImportPlan(
+            problems: read.problems,
+            inFile: read.records.length,
+            toAdd: fresh.length,
+            apply: () => controller.addAll(fresh),
+          );
+        },
       ),
     );
   }

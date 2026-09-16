@@ -3,14 +3,14 @@ import 'package:flutter/material.dart';
 import '../theme/brutal_skin.dart';
 import '../widgets/brutal_blocks.dart';
 
-/// Arranges the four blocks both entry screens are made of.
+/// Arranges the five blocks both entry screens are made of.
 ///
 /// The two densities lay them out quite differently:
 ///
 /// * **Comfortable** stacks everything in one wide column and lets the page
 ///   scroll. Big type, lots of room, nothing to hunt for.
-/// * **Compact** puts the form in a left column and the table with the export
-///   buttons in a right one, so the whole screen is visible at once without
+/// * **Compact** puts the form and the import button in a left column and the
+///   table with the export buttons in a right one, so the whole screen is visible at once without
 ///   scrolling the page. The table takes whatever height is left over and
 ///   scrolls inside itself when there are more rows than fit - the one thing
 ///   a fixed-height layout cannot avoid once the list grows.
@@ -22,6 +22,7 @@ class EntryScreenLayout extends StatelessWidget {
     required this.form,
     required this.table,
     required this.export,
+    required this.importSection,
   });
 
   final ScrollController scrollController;
@@ -29,6 +30,7 @@ class EntryScreenLayout extends StatelessWidget {
   final Widget form;
   final Widget table;
   final Widget export;
+  final Widget importSection;
 
   @override
   Widget build(BuildContext context) {
@@ -57,6 +59,8 @@ class EntryScreenLayout extends StatelessWidget {
               BrutalGap(skin.sizes.gapSection),
               export,
               BrutalGap(skin.sizes.gapSection),
+              importSection,
+              BrutalGap(skin.sizes.gapSection),
             ],
           ),
         ),
@@ -70,8 +74,10 @@ class EntryScreenLayout extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          // Left: the count and the form. Scrolls on its own only if the
-          // window is too short for the form itself.
+          // Left: the count, the form and the import button. Scrolls on its
+          // own only if the window is too short for them. Import sits here
+          // rather than under the exports so it does not take height from
+          // the table.
           Expanded(
             child: SingleChildScrollView(
               controller: scrollController,
@@ -81,6 +87,8 @@ class EntryScreenLayout extends StatelessWidget {
                   BrutalRecordCount(count: recordCount),
                   BrutalGap(skin.sizes.gap),
                   form,
+                  BrutalGap(skin.sizes.gap),
+                  importSection,
                 ],
               ),
             ),

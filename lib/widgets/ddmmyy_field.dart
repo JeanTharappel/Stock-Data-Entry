@@ -69,9 +69,13 @@ class DdmmyyField extends StatelessWidget {
     required this.controller,
     required this.onChanged,
     this.errorText,
+    this.label = 'DATE',
   });
 
   final DdmmyyController controller;
+
+  /// The heading above the three boxes.
+  final String label;
 
   /// Called on every keystroke and after the calendar closes, so the screen
   /// can re-run validation and refresh the readback line.
@@ -94,7 +98,7 @@ class DdmmyyField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text('DATE', style: skin.text.fieldLabel),
+        Text(label, style: skin.text.fieldLabel),
         if (!compact) ...<Widget>[
           const SizedBox(height: 4),
           Text(

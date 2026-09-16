@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_ce/hive.dart';
 
 import '../core/ddmmyy.dart';
+import '../core/record_spec.dart';
 import '../models/dividend_rate.dart';
 import 'boxes.dart';
 
@@ -57,6 +58,28 @@ class DividendRateController extends Notifier<List<DividendRate>> {
         divRate: divRate,
       ),
     );
+    _refresh();
+  }
+
+  /// The records in [incoming] that are not already saved with exactly the
+  /// same company code, date and rate. Used by import, so loading the same
+  /// backup twice does not store everything twice.
+  List<DividendRate> notYetSaved(List<DividendRate> incoming) {
+    final saved = _box.values.map(_sameValuesKey).toSet();
+    return incoming
+        .where((record) => !saved.contains(_sameValuesKey(record)))
+        .toList();
+  }
+
+  /// Compares the rate at its stored precision, so 12.5 read back from a file
+  /// always matches the 12.5 already saved.
+  static String _sameValuesKey(DividendRate record) =>
+      '${record.identityKey}|'
+      '${record.divRate.toStringAsFixed(DividendRateSpec.rateDecimals)}';
+
+  /// Stores every record in [records] in one write.
+  Future<void> addAll(List<DividendRate> records) async {
+    await _box.addAll(records);
     _refresh();
   }
 

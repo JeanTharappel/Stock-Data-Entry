@@ -7,15 +7,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:stock_data_entry/data/app_settings.dart';
 import 'package:stock_data_entry/data/boxes.dart';
+import 'package:stock_data_entry/export/export_service.dart';
 import 'package:stock_data_entry/hive_registrar.g.dart';
+import 'package:stock_data_entry/import/picked_file.dart';
 import 'package:stock_data_entry/models/dividend_rate.dart';
 import 'package:stock_data_entry/models/price_range.dart';
 import 'package:stock_data_entry/screens/dividend_rate_screen.dart';
 import 'package:stock_data_entry/screens/home_shell.dart';
+import 'package:stock_data_entry/screens/inquiry_results_page.dart';
+import 'package:stock_data_entry/screens/inquiry_screen.dart';
 import 'package:stock_data_entry/screens/price_range_screen.dart';
 import 'package:stock_data_entry/theme/brutal_skin.dart';
 import 'package:stock_data_entry/theme/brutal_theme.dart';
 import 'package:stock_data_entry/widgets/brutal_text_field.dart';
+import 'package:stock_data_entry/widgets/ddmmyy_field.dart';
 
 /// Builds and drives the real app.
 ///
@@ -101,6 +106,10 @@ void main() {
     /// Pass false to launch with an untouched settings box, the way a
     /// first-time visitor arrives.
     bool seedSettings = true,
+
+    /// What IMPORT FROM A FILE receives, in place of the browser's file
+    /// dialog. Null behaves like the user closing the dialog.
+    PickedFile? pickedFile,
   }) async {
     // A tall surface so the whole page is laid out; the default 800x600 test
     // window would report overflow that a real browser never sees.
@@ -133,6 +142,7 @@ void main() {
           dividendRateBoxProvider.overrideWithValue(dividendBox),
           priceRangeBoxProvider.overrideWithValue(priceBox),
           settingsBoxProvider.overrideWithValue(settingsBox),
+          filePickerProvider.overrideWithValue(() async => pickedFile),
         ],
         child: const _TestApp(),
       ),
@@ -153,6 +163,51 @@ void main() {
 
   final Finder dividendScreen = find.byType(DividendRateScreen);
   final Finder priceScreen = find.byType(PriceRangeScreen);
+  final Finder inquiryScreen = find.byType(InquiryScreen);
+
+  /// One of the inquiry tab's two date blocks, by its heading.
+  Finder dateBlock(String label) => find.ancestor(
+    of: find.descendant(of: inquiryScreen, matching: find.text(label)),
+    matching: find.byType(DdmmyyField),
+  );
+
+  /// Stores records straight into the boxes, before the app is built. Real
+  /// I/O, so it runs outside the fake clock.
+  Future<void> seed(
+    WidgetTester tester, {
+    List<DividendRate> dividends = const <DividendRate>[],
+    List<PriceRange> prices = const <PriceRange>[],
+  }) async {
+    await tester.runAsync(() async {
+      await dividendBox.addAll(dividends);
+      await priceBox.addAll(prices);
+    });
+  }
+
+  /// Opens the INQUIRY tab and searches [ccode] between two DDMMYY dates.
+  Future<void> search(
+    WidgetTester tester, {
+    required String ccode,
+    String from = '010126',
+    String to = '311226',
+  }) async {
+    Future<void> fillDate(String label, String ddmmyy) async {
+      final block = dateBlock(label);
+      await tester.enterText(boxLabelled(block, 'DAY'), ddmmyy.substring(0, 2));
+      await tester.enterText(
+        boxLabelled(block, 'MONTH'),
+        ddmmyy.substring(2, 4),
+      );
+      await tester.enterText(boxLabelled(block, 'YEAR'), ddmmyy.substring(4));
+    }
+
+    await press(tester, find.text('INQUIRY'));
+    await tester.enterText(boxLabelled(inquiryScreen, 'COMPANY CODE'), ccode);
+    await fillDate('FROM DATE', from);
+    await fillDate('TO DATE', to);
+    await settle(tester);
+    await press(tester, find.text('SHOW RECORDS'));
+  }
 
   Future<void> fillDividendForm(
     WidgetTester tester, {
@@ -565,6 +620,322 @@ void main() {
     expect(priceBox.length, 1);
     expect(priceBox.values.first.lowVal, 250);
     expect(priceBox.values.first.highVal, 900);
+  });
+
+  testWidgets('an inquiry finds only that company inside the dates', (
+    tester,
+  ) async {
+    await seed(
+      tester,
+      dividends: <DividendRate>[
+        DividendRate(ccode: 'ACME', entryDate: '050826', divRate: 12.5),
+        DividendRate(ccode: 'ACME', entryDate: '100326', divRate: 8.0),
+        // Wrong year, and wrong company: neither may appear.
+        DividendRate(ccode: 'ACME', entryDate: '311225', divRate: 77.7),
+        DividendRate(ccode: 'OTHER', entryDate: '050826', divRate: 55.5),
+      ],
+      prices: <PriceRange>[
+        PriceRange(
+          ccode: 'ACME',
+          entryDate: '070826',
+          lowVal: 100,
+          highVal: 250,
+        ),
+      ],
+    );
+    await pumpApp(tester);
+    await search(tester, ccode: 'acme');
+
+    expect(
+      find.text('SHOWING ACME FROM 01 JANUARY 2026 TO 31 DECEMBER 2026.'),
+      findsOneWidget,
+    );
+    expect(find.text('SEE DIVIDEND RATES (2 FOUND)'), findsOneWidget);
+    expect(find.text('SEE PRICE RANGES (1 FOUND)'), findsOneWidget);
+
+    // Dividend rates open on their own page: date and rate, oldest first.
+    await press(tester, find.text('SEE DIVIDEND RATES (2 FOUND)'));
+    final dividendPage = find.byType(DividendInquiryPage);
+    expect(dividendPage, findsOneWidget);
+    Finder onDividendPage(String text) =>
+        find.descendant(of: dividendPage, matching: find.text(text));
+    expect(onDividendPage('12.5'), findsOneWidget);
+    expect(onDividendPage('8.0'), findsOneWidget);
+    expect(onDividendPage('77.7'), findsNothing);
+    expect(onDividendPage('55.5'), findsNothing);
+    expect(
+      tester.getTopLeft(onDividendPage('10 MAR 2026')).dy,
+      lessThan(tester.getTopLeft(onDividendPage('05 AUG 2026')).dy),
+    );
+
+    await press(tester, find.text('GO BACK TO THE SEARCH'));
+    expect(dividendPage, findsNothing);
+
+    // Price ranges on theirs: date, low and high.
+    await press(tester, find.text('SEE PRICE RANGES (1 FOUND)'));
+    final pricePage = find.byType(PriceInquiryPage);
+    for (final text in <String>['07 AUG 2026', '100', '250']) {
+      expect(
+        find.descendant(of: pricePage, matching: find.text(text)),
+        findsOneWidget,
+      );
+    }
+  });
+
+  testWidgets('an inquiry refuses a TO date before the FROM date', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    await search(tester, ccode: 'ACME', from: '010126', to: '311225');
+
+    expect(
+      find.textContaining('TO DATE IS BEFORE THE FROM DATE'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('SEE DIVIDEND RATES'), findsNothing);
+  });
+
+  testWidgets('EDIT on an inquiry result loads it into the entry form', (
+    tester,
+  ) async {
+    await seed(
+      tester,
+      prices: <PriceRange>[
+        PriceRange(
+          ccode: 'ACME',
+          entryDate: '070826',
+          lowVal: 100,
+          highVal: 250,
+        ),
+      ],
+    );
+    await pumpApp(tester);
+    await search(tester, ccode: 'ACME');
+    await press(tester, find.text('SEE PRICE RANGES (1 FOUND)'));
+
+    await press(
+      tester,
+      find.descendant(
+        of: find.byType(PriceInquiryPage),
+        matching: find.text('EDIT'),
+      ),
+    );
+
+    // The results page has closed, and the price range tab is showing with
+    // the record loaded into its form.
+    expect(find.byType(PriceInquiryPage), findsNothing);
+    expect(find.text('CHANGE A PRICE RANGE'), findsOneWidget);
+    String boxText(String label) => tester
+        .widget<TextField>(boxLabelled(priceScreen, label))
+        .controller!
+        .text;
+    expect(boxText('COMPANY CODE'), 'ACME');
+    expect(boxText('LOW VALUE'), '100');
+    expect(boxText('HIGH VALUE'), '250');
+
+    // Saving changes the stored record rather than adding a second one.
+    await tester.enterText(boxLabelled(priceScreen, 'HIGH VALUE'), '300');
+    await settle(tester);
+    await press(
+      tester,
+      find.descendant(of: priceScreen, matching: find.text('SAVE CHANGES')),
+    );
+    expect(priceBox.length, 1);
+    expect(priceBox.values.first.highVal, 300);
+  });
+
+  testWidgets('DELETE on an inquiry result asks first, then removes it', (
+    tester,
+  ) async {
+    await seed(
+      tester,
+      dividends: <DividendRate>[
+        DividendRate(ccode: 'ACME', entryDate: '050826', divRate: 12.5),
+      ],
+    );
+    await pumpApp(tester);
+
+    // Have the record open in the entry form, to check the form lets go of it.
+    await press(
+      tester,
+      find.descendant(of: dividendScreen, matching: find.text('EDIT')),
+    );
+    expect(find.text('CHANGE A DIVIDEND RATE'), findsOneWidget);
+
+    await search(tester, ccode: 'ACME');
+    await press(tester, find.text('SEE DIVIDEND RATES (1 FOUND)'));
+    final dividendPage = find.byType(DividendInquiryPage);
+    final deleteButton = find.descendant(
+      of: dividendPage,
+      matching: find.text('DELETE THIS ROW'),
+    );
+
+    await press(tester, deleteButton);
+    expect(
+      find.text('ARE YOU SURE YOU WANT TO DELETE THIS RECORD?'),
+      findsOneWidget,
+    );
+    await press(tester, find.text('NO, KEEP IT'));
+    expect(dividendBox.length, 1);
+
+    await press(tester, deleteButton);
+    await press(tester, find.text('YES, DELETE IT'));
+    expect(dividendBox.length, 0);
+
+    // The page stays open and says so, and the search tab's count follows.
+    expect(
+      find.descendant(
+        of: dividendPage,
+        matching: find.textContaining('NO RECORDS FOUND'),
+      ),
+      findsOneWidget,
+    );
+    await press(tester, find.text('GO BACK TO THE SEARCH'));
+    expect(find.text('SEE DIVIDEND RATES (NONE FOUND)'), findsOneWidget);
+
+    // And the entry form is no longer changing a record that is gone.
+    await press(tester, find.text('DIVIDEND RATE ENTRY'));
+    expect(find.text('ADD A DIVIDEND RATE'), findsOneWidget);
+    expect(
+      find.text('THE RECORD YOU WERE CHANGING HAS BEEN DELETED.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the inquiry tab and its results lay out when compact', (
+    tester,
+  ) async {
+    await pumpApp(tester, density: BrutalDensity.compact);
+    tester.view.physicalSize = const Size(1600, 900);
+    await settle(tester);
+
+    await search(tester, ccode: 'ACME');
+    expect(find.text('SEE DIVIDEND RATES (NONE FOUND)'), findsOneWidget);
+
+    await press(tester, find.text('SEE DIVIDEND RATES (NONE FOUND)'));
+    expect(
+      find.textContaining('THERE ARE NO DIVIDEND RATES FOR ACME'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('importing a backup asks first and skips what is already saved', (
+    tester,
+  ) async {
+    final backup = <DividendRate>[
+      DividendRate(ccode: 'ACME', entryDate: '050826', divRate: 12.5),
+      DividendRate(ccode: 'ACME', entryDate: '100326', divRate: 8.0),
+      DividendRate(ccode: 'ZED', entryDate: '010126', divRate: 3.5),
+    ];
+    // One of the three is already saved.
+    await seed(
+      tester,
+      dividends: <DividendRate>[
+        DividendRate(ccode: 'ACME', entryDate: '050826', divRate: 12.5),
+      ],
+    );
+    await pumpApp(
+      tester,
+      pickedFile: PickedFile(
+        name: 'dividend_rate_backup.xlsx',
+        bytes: ExportService.dividendRateBytes(backup, ExportFormat.xlsx),
+      ),
+    );
+    final importButton = find.descendant(
+      of: dividendScreen,
+      matching: find.text('IMPORT FROM A FILE'),
+    );
+
+    // Saying no leaves the box alone.
+    await press(tester, importButton);
+    expect(find.text('DO YOU WANT TO ADD 2 RECORDS?'), findsOneWidget);
+    expect(
+      find.textContaining('ALREADY SAVED, WILL BE SKIPPED: 1'),
+      findsOneWidget,
+    );
+    await press(tester, find.text('NO, CANCEL'));
+    expect(dividendBox.length, 1);
+    expect(
+      find.text('NOTHING WAS IMPORTED. YOU CHOSE TO CANCEL.'),
+      findsOneWidget,
+    );
+
+    await press(tester, importButton);
+    await press(tester, find.text('YES, ADD THEM'));
+    expect(dividendBox.length, 3);
+    expect(find.text('YOU HAVE 3 RECORDS SAVED.'), findsOneWidget);
+    expect(
+      find.text(
+        'ADDED 2 RECORDS FROM dividend_rate_backup.xlsx. '
+        '1 RECORD WAS ALREADY SAVED AND WAS SKIPPED.',
+      ),
+      findsOneWidget,
+    );
+
+    // The same file again adds nothing.
+    await press(tester, importButton);
+    expect(find.text('YES, ADD THEM'), findsNothing);
+    expect(dividendBox.length, 3);
+    expect(
+      find.text(
+        'EVERY RECORD IN dividend_rate_backup.xlsx IS ALREADY SAVED. '
+        'NOTHING WAS ADDED.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a file with problems imports nothing and says why', (
+    tester,
+  ) async {
+    await pumpApp(
+      tester,
+      pickedFile: PickedFile(
+        name: 'price_range.csv',
+        bytes: ExportService.dividendRateBytes(<DividendRate>[
+          DividendRate(ccode: 'ACME', entryDate: '050826', divRate: 12.5),
+        ], ExportFormat.csv),
+      ),
+    );
+    await press(tester, find.text('PRICE RANGE ENTRY'));
+    await press(
+      tester,
+      find.descendant(
+        of: priceScreen,
+        matching: find.text('IMPORT FROM A FILE'),
+      ),
+    );
+
+    expect(find.text('YES, ADD THEM'), findsNothing);
+    expect(priceBox.length, 0);
+    expect(
+      find.descendant(
+        of: priceScreen,
+        matching: find.textContaining(
+          'IMPORT IT ON THE DIVIDEND RATE ENTRY TAB',
+        ),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('closing the file dialog without choosing does nothing', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    final importButton = find.descendant(
+      of: dividendScreen,
+      matching: find.text('IMPORT FROM A FILE'),
+    );
+    await press(tester, importButton);
+
+    expect(find.text('IMPORT THESE RECORDS?'), findsNothing);
+    expect(dividendBox.length, 0);
+    // And the button still works afterwards.
+    expect(
+      tester.widget<Text>(importButton).style?.decoration,
+      isNot(TextDecoration.lineThrough),
+    );
   });
 }
 

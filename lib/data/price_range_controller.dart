@@ -57,6 +57,23 @@ class PriceRangeController extends Notifier<List<PriceRange>> {
     _refresh();
   }
 
+  /// See [DividendRateController.notYetSaved].
+  List<PriceRange> notYetSaved(List<PriceRange> incoming) {
+    final saved = _box.values.map(_sameValuesKey).toSet();
+    return incoming
+        .where((record) => !saved.contains(_sameValuesKey(record)))
+        .toList();
+  }
+
+  static String _sameValuesKey(PriceRange record) =>
+      '${record.identityKey}|${record.lowVal}|${record.highVal}';
+
+  /// Stores every record in [records] in one write.
+  Future<void> addAll(List<PriceRange> records) async {
+    await _box.addAll(records);
+    _refresh();
+  }
+
   Future<void> update({
     required Object key,
     required String ccode,

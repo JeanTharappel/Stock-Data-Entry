@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stock_data_entry/core/ddmmyy.dart';
+import 'package:stock_data_entry/core/inquiry.dart';
 import 'package:stock_data_entry/core/record_spec.dart';
 import 'package:stock_data_entry/core/validators.dart';
 import 'package:stock_data_entry/export/export_service.dart';
@@ -83,6 +84,70 @@ void main() {
       expect(Validators.highNotBelowLow(low: '100', high: '100'), isNull);
       expect(Validators.highNotBelowLow(low: '100', high: '250'), isNull);
       expect(Validators.highNotBelowLow(low: '250', high: '100'), isNotNull);
+    });
+
+    test('a date range can be one day long but never runs backwards', () {
+      expect(Validators.toNotBeforeFrom(from: '010126', to: '311226'), isNull);
+      expect(Validators.toNotBeforeFrom(from: '050826', to: '050826'), isNull);
+      // 31/12/25 is the day before 01/01/26, although "311225" > "010126".
+      expect(
+        Validators.toNotBeforeFrom(from: '010126', to: '311225'),
+        isNotNull,
+      );
+    });
+
+    test('a second date on a screen names itself in its message', () {
+      expect(
+        Validators.dateParts(
+          day: '',
+          month: '',
+          year: '',
+          fieldName: 'FROM DATE',
+        ),
+        startsWith('FROM DATE IS MISSING.'),
+      );
+    });
+  });
+
+  group('inquiry', () {
+    final year2026 = InquiryCriteria(
+      ccode: 'acme ',
+      fromDate: '010126',
+      toDate: '311226',
+    );
+
+    test('matches the company code whatever case it was typed in', () {
+      expect(year2026.ccode, 'ACME');
+      expect(year2026.matches(ccode: 'ACME', entryDate: '050826'), isTrue);
+      expect(year2026.matches(ccode: 'OTHER', entryDate: '050826'), isFalse);
+    });
+
+    test('includes both end dates and nothing outside them', () {
+      expect(year2026.matches(ccode: 'ACME', entryDate: '010126'), isTrue);
+      expect(year2026.matches(ccode: 'ACME', entryDate: '311226'), isTrue);
+      expect(year2026.matches(ccode: 'ACME', entryDate: '311225'), isFalse);
+      expect(year2026.matches(ccode: 'ACME', entryDate: '010127'), isFalse);
+    });
+
+    test('compares real dates across the century window', () {
+      final range = InquiryCriteria(
+        ccode: 'ACME',
+        fromDate: '010199',
+        toDate: '311201',
+      );
+      expect(range.matches(ccode: 'ACME', entryDate: '150600'), isTrue);
+      expect(range.matches(ccode: 'ACME', entryDate: '150698'), isFalse);
+    });
+
+    test('never matches a stored date it cannot read', () {
+      expect(year2026.matches(ccode: 'ACME', entryDate: 'BADBAD'), isFalse);
+    });
+
+    test('describes itself in words', () {
+      expect(
+        year2026.describe(),
+        'ACME FROM 01 JANUARY 2026 TO 31 DECEMBER 2026',
+      );
     });
   });
 

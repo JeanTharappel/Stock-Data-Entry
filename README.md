@@ -26,11 +26,24 @@ screen actually does.
 - **A results table per screen**, sorted oldest-date-first, with EDIT and
   DELETE buttons on every row (full words, never icon-only).
 - **Delete confirmation** — a plain yes/no modal, no swipe-to-delete.
+- **Inquiry tab** — type a company code and a FROM and TO date, and see
+  how many dividend rates and price ranges fall in that range. Each list
+  opens on its own page (dividend: date and rate; price: date, low and high),
+  with EDIT and DELETE on every row. EDIT switches to the matching entry tab
+  with the record loaded into its form, so there is still only one form per
+  record type.
 - **Duplicate-record warning** — saving a company code + date combination
   that already exists asks for confirmation before creating a second one.
 - **Export as CSV, XLSX, or TXT**, triggered as a browser download. CSV and
   XLSX add a spelled-out date column for readability; TXT reproduces the
   original fixed-width layout exactly, padded to spec.
+- **Import from CSV, XLSX, or TXT** — reads back any file the export
+  wrote, so an export doubles as a backup. Every row is checked with the same
+  rules as the forms; if any row is bad nothing is imported and the problem
+  rows are listed. It asks before adding anything, skips records already
+  saved with the same values, and never changes or deletes what is there. A
+  price range file chosen on the dividend rate tab (or the other way round)
+  is recognised and named.
 - **Local persistent storage** (Hive, backed by the browser's IndexedDB) —
   nothing is sent to a server, nothing is lost on refresh.
 - **Light/dark mode** and a **compact "fit on one page" layout** (two
@@ -137,6 +150,7 @@ lib/
     record_spec.dart           Field widths for both record types (the "copybook")
     ddmmyy.dart                DDMMYY date parsing/formatting/validation
     validators.dart            Field-level and cross-field validation rules
+    inquiry.dart               The inquiry search rule: one company, between two dates
   models/
     dividend_rate.dart         DividendRate record class
     dividend_rate.g.dart       Generated storage adapter (do not hand-edit)
@@ -147,10 +161,16 @@ lib/
     dividend_rate_controller.dart   All reads/writes for DividendRate records
     price_range_controller.dart     All reads/writes for PriceRange records
     app_settings.dart          Remembers light/dark and compact/roomy choice
+    navigation.dart            Which tab is showing, and EDIT requests sent between tabs
   export/
     export_service.dart        Builds the CSV / XLSX / TXT file contents
     file_download.dart         Picks the right "save this file" code for the platform
     file_download_web.dart     The browser-download implementation
+  import/
+    import_service.dart        Reads exported CSV / XLSX / TXT files back into records
+    picked_file.dart           The chosen file, and the swappable file-picker provider
+    file_pick.dart             Picks the right "choose a file" code for the platform
+    file_pick_web.dart         The browser file-dialog implementation
   theme/
     brutal_skin.dart           Every colour, size, and text style, as one object
     brutal_theme.dart          Wires the skin into Flutter's own widgets (calendar, scrollbars)
@@ -162,14 +182,19 @@ lib/
     brutal_blocks.dart         Panels, section headers, notice/message blocks
     ddmmyy_field.dart          The DAY/MONTH/YEAR date-entry widget
     export_section.dart        The three export buttons
+    import_section.dart        The import button, its confirm step and messages
   screens/
     home_shell.dart            The outer frame: title bar, tabs, toggles
     dividend_rate_screen.dart  The Dividend Rate form + table + export
     price_range_screen.dart    The Price Range form + table + export
     entry_screen_layout.dart   Shared page layout both screens sit inside
+    inquiry_screen.dart        The Inquiry tab: company code + date range search
+    inquiry_results_page.dart  The dividend and price result pages it opens
+    record_deletion.dart       The shared "are you sure?" delete step
 
 test/
   record_spec_test.dart        Tests for validation, date rules, fixed-width padding
+  import_test.dart             Tests that every export format imports back unchanged
   app_smoke_test.dart          Tests that build the real app and interact with it
 
 web/                           Browser shell (index.html, icons) — Flutter fills this in

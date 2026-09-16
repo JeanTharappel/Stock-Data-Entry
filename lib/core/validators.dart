@@ -40,35 +40,54 @@ abstract final class Validators {
 
   /// Validates the three date boxes together. They only make sense as a set,
   /// so one clear message is shown for the whole group rather than three.
+  ///
+  /// [fieldName] names the date in the message, for screens with more than
+  /// one date on them.
   static String? dateParts({
     required String? day,
     required String? month,
     required String? year,
+    String fieldName = 'DATE',
   }) {
     final dd = (day ?? '').trim();
     final mm = (month ?? '').trim();
     final yy = (year ?? '').trim();
+    final notValid = '$fieldName IS NOT VALID. ENTER AS DD MM YY.';
 
     if (dd.isEmpty && mm.isEmpty && yy.isEmpty) {
-      return 'DATE IS MISSING. ENTER THE DAY, THE MONTH AND THE YEAR.';
+      return '$fieldName IS MISSING. ENTER THE DAY, THE MONTH AND THE YEAR.';
     }
     if (dd.isEmpty || mm.isEmpty || yy.isEmpty) {
-      return 'DATE IS NOT COMPLETE. FILL IN THE DAY, THE MONTH AND THE YEAR.';
+      return '$fieldName IS NOT COMPLETE. '
+          'FILL IN THE DAY, THE MONTH AND THE YEAR.';
     }
 
     final dayNum = int.tryParse(dd);
     final monthNum = int.tryParse(mm);
     final yearNum = int.tryParse(yy);
     if (dayNum == null || monthNum == null || yearNum == null) {
-      return dateErrorMessage;
+      return notValid;
     }
     if (yy.length > 2 || dd.length > 2 || mm.length > 2) {
-      return dateErrorMessage;
+      return notValid;
     }
 
     if (buildDate(day: dayNum, month: monthNum, year: expandYear(yearNum)) ==
         null) {
-      return dateErrorMessage;
+      return notValid;
+    }
+    return null;
+  }
+
+  /// Cross-field rule for a date range: the TO date can equal the FROM date
+  /// but never come before it. Both are `DDMMYY`; reported under TO DATE.
+  static String? toNotBeforeFrom({required String? from, required String? to}) {
+    final fromDate = parseDdmmyy(from);
+    final toDate = parseDdmmyy(to);
+    if (fromDate == null || toDate == null) return null;
+    if (toDate.isBefore(fromDate)) {
+      return 'TO DATE IS BEFORE THE FROM DATE. '
+          'THE TO DATE MUST BE ${spellOutDdmmyy(from)} OR LATER.';
     }
     return null;
   }

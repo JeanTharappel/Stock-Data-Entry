@@ -72,6 +72,9 @@ class BrutalTable extends StatefulWidget {
 }
 
 class _BrutalTableState extends State<BrutalTable> {
+  /// How thick the bar down the left of the row being edited is.
+  static const double _highlightBarWidth = 10;
+
   /// Each scroll direction needs its own controller. Without one the Scrollbar
   /// reaches for the PrimaryScrollController, which belongs to whatever is
   /// scrolling behind it, and paints against the wrong position.
@@ -118,7 +121,11 @@ class _BrutalTableState extends State<BrutalTable> {
           (sum, column) => sum + column.width * columnScale,
         ) +
         actionsWidth +
-        edge * 2;
+        edge * 2 +
+        // Room for the bar that marks the row being edited. A border takes
+        // space from what is inside it, so without this that row alone would
+        // be too narrow for its cells.
+        _highlightBarWidth;
 
     return Container(
       decoration: BoxDecoration(border: widget.bordered ? skin.border : null),
@@ -216,7 +223,7 @@ class _BrutalTableState extends State<BrutalTable> {
           top: BorderSide(color: skin.colors.ink, width: skin.sizes.border),
           left: BorderSide(
             color: skin.colors.ink,
-            width: isHighlighted ? 10 : 0,
+            width: isHighlighted ? _highlightBarWidth : 0,
           ),
         ),
       ),

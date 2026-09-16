@@ -70,29 +70,25 @@ abstract final class ExportService {
     return lines.join('\r\n');
   }
 
+  /// The file contents for [format], exactly as they are downloaded. Public
+  /// so the import tests can feed real exported files back in.
+  static Uint8List dividendRateBytes(
+    List<DividendRate> records,
+    ExportFormat format,
+  ) => switch (format) {
+    ExportFormat.csv => _csvBytes(dividendRateRows(records)),
+    ExportFormat.xlsx => _xlsxBytes('DIVIDEND RATE', dividendRateRows(records)),
+    ExportFormat.txt => _textBytes(dividendRateFixedWidth(records)),
+  };
+
   static Future<void> exportDividendRates(
     List<DividendRate> records,
     ExportFormat format,
-  ) {
-    final fileName = _fileName('dividend_rate', format);
-    return switch (format) {
-      ExportFormat.csv => _download(
-        _csvBytes(dividendRateRows(records)),
-        fileName,
-        format,
-      ),
-      ExportFormat.xlsx => _download(
-        _xlsxBytes('DIVIDEND RATE', dividendRateRows(records)),
-        fileName,
-        format,
-      ),
-      ExportFormat.txt => _download(
-        _textBytes(dividendRateFixedWidth(records)),
-        fileName,
-        format,
-      ),
-    };
-  }
+  ) => _download(
+    dividendRateBytes(records, format),
+    _fileName('dividend_rate', format),
+    format,
+  );
 
   // -------------------------------------------------------------------------
   // PRICE RANGE
@@ -131,29 +127,24 @@ abstract final class ExportService {
     return lines.join('\r\n');
   }
 
+  /// See [dividendRateBytes].
+  static Uint8List priceRangeBytes(
+    List<PriceRange> records,
+    ExportFormat format,
+  ) => switch (format) {
+    ExportFormat.csv => _csvBytes(priceRangeRows(records)),
+    ExportFormat.xlsx => _xlsxBytes('PRICE RANGE', priceRangeRows(records)),
+    ExportFormat.txt => _textBytes(priceRangeFixedWidth(records)),
+  };
+
   static Future<void> exportPriceRanges(
     List<PriceRange> records,
     ExportFormat format,
-  ) {
-    final fileName = _fileName('price_range', format);
-    return switch (format) {
-      ExportFormat.csv => _download(
-        _csvBytes(priceRangeRows(records)),
-        fileName,
-        format,
-      ),
-      ExportFormat.xlsx => _download(
-        _xlsxBytes('PRICE RANGE', priceRangeRows(records)),
-        fileName,
-        format,
-      ),
-      ExportFormat.txt => _download(
-        _textBytes(priceRangeFixedWidth(records)),
-        fileName,
-        format,
-      ),
-    };
-  }
+  ) => _download(
+    priceRangeBytes(records, format),
+    _fileName('price_range', format),
+    format,
+  );
 
   // -------------------------------------------------------------------------
   // ENCODERS
