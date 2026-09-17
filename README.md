@@ -23,15 +23,17 @@ screen actually does.
 - **Real calendar-date validation** — `31/02/26` is rejected as not a real
   date, not just as badly-formatted text. A two-digit year is windowed to a
   4-digit one (`00`–`69` → 2000s, `70`–`99` → 1900s).
-- **A results table per screen**, sorted oldest-date-first, with EDIT and
-  DELETE buttons on every row (full words, never icon-only).
+- **A results table per entry screen**, sorted oldest-date-first, with EDIT
+  and DELETE buttons on every row (full words, never icon-only). The same
+  table, without those buttons, shows the inquiry results.
 - **Delete confirmation** — a plain yes/no modal, no swipe-to-delete.
-- **Inquiry tab** — type a company code and a FROM and TO date, and see
-  how many dividend rates and price ranges fall in that range. Each list
-  opens on its own page (dividend: date and rate; price: date, low and high),
-  with EDIT and DELETE on every row. EDIT switches to the matching entry tab
-  with the record loaded into its form, so there is still only one form per
-  record type.
+- **Inquiry tab**, with two searches. **One company**: a company code and a
+  FROM and TO date shows how many dividend rates and price ranges fall in
+  that range, each list opening on its own page (dividend: date and rate;
+  price: date, low and high). **One month**: a month and year as `MM` and
+  `YY` lists every company's dividend rates for that month — dividend records
+  only. Every result page is read-only; records are added, changed and
+  deleted on the entry tabs.
 - **Duplicate-record warning** — saving a company code + date combination
   that already exists asks for confirmation before creating a second one.
 - **Export as CSV, XLSX, or TXT**, triggered as a browser download. CSV and
@@ -150,7 +152,7 @@ lib/
     record_spec.dart           Field widths for both record types (the "copybook")
     ddmmyy.dart                DDMMYY date parsing/formatting/validation
     validators.dart            Field-level and cross-field validation rules
-    inquiry.dart               The inquiry search rule: one company, between two dates
+    inquiry.dart               The two inquiry search rules: one company between two dates, or one month
   models/
     dividend_rate.dart         DividendRate record class
     dividend_rate.g.dart       Generated storage adapter (do not hand-edit)
@@ -161,7 +163,7 @@ lib/
     dividend_rate_controller.dart   All reads/writes for DividendRate records
     price_range_controller.dart     All reads/writes for PriceRange records
     app_settings.dart          Remembers light/dark and compact/roomy choice
-    navigation.dart            Which tab is showing, and EDIT requests sent between tabs
+    navigation.dart            Which tab is showing
   export/
     export_service.dart        Builds the CSV / XLSX / TXT file contents
     file_download.dart         Picks the right "save this file" code for the platform
@@ -188,8 +190,8 @@ lib/
     dividend_rate_screen.dart  The Dividend Rate form + table + export
     price_range_screen.dart    The Price Range form + table + export
     entry_screen_layout.dart   Shared page layout both screens sit inside
-    inquiry_screen.dart        The Inquiry tab: company code + date range search
-    inquiry_results_page.dart  The dividend and price result pages it opens
+    inquiry_screen.dart        The Inquiry tab: the company search and the month search
+    inquiry_results_page.dart  The three read-only result pages they open
     record_deletion.dart       The shared "are you sure?" delete step
 
 test/

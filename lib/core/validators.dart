@@ -79,6 +79,39 @@ abstract final class Validators {
     return null;
   }
 
+  // -------------------------------------------------------------------------
+  // MONTH AND YEAR ON THEIR OWN (the month inquiry)
+  // -------------------------------------------------------------------------
+
+  /// A month as `MM`, 01 to 12.
+  static String? monthNumber(String? raw) {
+    final value = (raw ?? '').trim();
+    if (value.isEmpty) {
+      return 'MONTH IS MISSING. TYPE THE MONTH AS TWO NUMBERS, '
+          'FOR EXAMPLE 08 FOR AUGUST.';
+    }
+    final month = int.tryParse(value);
+    if (month == null || value.length > 2 || month < 1 || month > 12) {
+      return 'MONTH IS NOT VALID. IT MUST BE BETWEEN 01 AND 12.';
+    }
+    return null;
+  }
+
+  /// A year as the same 2 digits the records are stored with.
+  static String? yearTwoDigits(String? raw) {
+    final value = (raw ?? '').trim();
+    if (value.isEmpty) {
+      return 'YEAR IS MISSING. TYPE THE LAST TWO NUMBERS OF THE YEAR, '
+          'FOR EXAMPLE 26 FOR 2026.';
+    }
+    final year = int.tryParse(value);
+    if (year == null || value.length > 2 || year < 0) {
+      return 'YEAR IS NOT VALID. TYPE THE LAST TWO NUMBERS OF THE YEAR, '
+          'FOR EXAMPLE 26 FOR 2026.';
+    }
+    return null;
+  }
+
   /// Cross-field rule for a date range: the TO date can equal the FROM date
   /// but never come before it. Both are `DDMMYY`; reported under TO DATE.
   static String? toNotBeforeFrom({required String? from, required String? to}) {

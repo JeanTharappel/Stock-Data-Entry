@@ -36,3 +36,29 @@ class InquiryCriteria {
   String describe() =>
       '$ccode FROM ${spellOutDdmmyy(fromDate)} TO ${spellOutDdmmyy(toDate)}';
 }
+
+/// The other inquiry: one calendar month, every company.
+///
+/// The month is given as `MM` and `YY`, the same two parts the stored date
+/// carries, and the 2-digit year is widened by the same century rule the rest
+/// of the app uses - so `08` `26` means August 2026.
+class MonthInquiry {
+  MonthInquiry({required this.month, required int twoDigitYear})
+    : year = expandYear(twoDigitYear);
+
+  /// 1 for January through 12 for December.
+  final int month;
+
+  /// The full 4-digit year.
+  final int year;
+
+  /// True when a record stored on [entryDate] falls in this month.
+  bool matches(String entryDate) {
+    final date = parseDdmmyy(entryDate);
+    if (date == null) return false;
+    return date.month == month && date.year == year;
+  }
+
+  /// The month in words, e.g. `AUGUST 2026`.
+  String describe() => '${monthName(month)} $year';
+}

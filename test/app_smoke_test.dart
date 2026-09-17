@@ -172,6 +172,14 @@ void main() {
     matching: find.byType(DdmmyyField),
   );
 
+  /// The month search's panel, which has its own MONTH and YEAR boxes.
+  /// `.first` is the closest Column ancestor - the month panel itself. The
+  /// ones further up hold both searches, whose date boxes are also labelled
+  /// MONTH and YEAR.
+  final Finder monthBlock = find
+      .ancestor(of: find.text('LOOK UP A MONTH'), matching: find.byType(Column))
+      .first;
+
   /// Stores records straight into the boxes, before the app is built. Real
   /// I/O, so it runs outside the fake clock.
   Future<void> seed(
@@ -651,6 +659,9 @@ void main() {
       find.text('SHOWING ACME FROM 01 JANUARY 2026 TO 31 DECEMBER 2026.'),
       findsOneWidget,
     );
+
+    // Nothing on a results page can change a record.
+    expect(find.text('WHAT WAS FOUND FOR THE COMPANY'), findsOneWidget);
     expect(find.text('SEE DIVIDEND RATES (2 FOUND)'), findsOneWidget);
     expect(find.text('SEE PRICE RANGES (1 FOUND)'), findsOneWidget);
 
@@ -696,113 +707,6 @@ void main() {
     expect(find.textContaining('SEE DIVIDEND RATES'), findsNothing);
   });
 
-  testWidgets('EDIT on an inquiry result loads it into the entry form', (
-    tester,
-  ) async {
-    await seed(
-      tester,
-      prices: <PriceRange>[
-        PriceRange(
-          ccode: 'ACME',
-          entryDate: '070826',
-          lowVal: 100,
-          highVal: 250,
-        ),
-      ],
-    );
-    await pumpApp(tester);
-    await search(tester, ccode: 'ACME');
-    await press(tester, find.text('SEE PRICE RANGES (1 FOUND)'));
-
-    await press(
-      tester,
-      find.descendant(
-        of: find.byType(PriceInquiryPage),
-        matching: find.text('EDIT'),
-      ),
-    );
-
-    // The results page has closed, and the price range tab is showing with
-    // the record loaded into its form.
-    expect(find.byType(PriceInquiryPage), findsNothing);
-    expect(find.text('CHANGE A PRICE RANGE'), findsOneWidget);
-    String boxText(String label) => tester
-        .widget<TextField>(boxLabelled(priceScreen, label))
-        .controller!
-        .text;
-    expect(boxText('COMPANY CODE'), 'ACME');
-    expect(boxText('LOW VALUE'), '100');
-    expect(boxText('HIGH VALUE'), '250');
-
-    // Saving changes the stored record rather than adding a second one.
-    await tester.enterText(boxLabelled(priceScreen, 'HIGH VALUE'), '300');
-    await settle(tester);
-    await press(
-      tester,
-      find.descendant(of: priceScreen, matching: find.text('SAVE CHANGES')),
-    );
-    expect(priceBox.length, 1);
-    expect(priceBox.values.first.highVal, 300);
-  });
-
-  testWidgets('DELETE on an inquiry result asks first, then removes it', (
-    tester,
-  ) async {
-    await seed(
-      tester,
-      dividends: <DividendRate>[
-        DividendRate(ccode: 'ACME', entryDate: '050826', divRate: 12.5),
-      ],
-    );
-    await pumpApp(tester);
-
-    // Have the record open in the entry form, to check the form lets go of it.
-    await press(
-      tester,
-      find.descendant(of: dividendScreen, matching: find.text('EDIT')),
-    );
-    expect(find.text('CHANGE A DIVIDEND RATE'), findsOneWidget);
-
-    await search(tester, ccode: 'ACME');
-    await press(tester, find.text('SEE DIVIDEND RATES (1 FOUND)'));
-    final dividendPage = find.byType(DividendInquiryPage);
-    final deleteButton = find.descendant(
-      of: dividendPage,
-      matching: find.text('DELETE THIS ROW'),
-    );
-
-    await press(tester, deleteButton);
-    expect(
-      find.text('ARE YOU SURE YOU WANT TO DELETE THIS RECORD?'),
-      findsOneWidget,
-    );
-    await press(tester, find.text('NO, KEEP IT'));
-    expect(dividendBox.length, 1);
-
-    await press(tester, deleteButton);
-    await press(tester, find.text('YES, DELETE IT'));
-    expect(dividendBox.length, 0);
-
-    // The page stays open and says so, and the search tab's count follows.
-    expect(
-      find.descendant(
-        of: dividendPage,
-        matching: find.textContaining('NO RECORDS FOUND'),
-      ),
-      findsOneWidget,
-    );
-    await press(tester, find.text('GO BACK TO THE SEARCH'));
-    expect(find.text('SEE DIVIDEND RATES (NONE FOUND)'), findsOneWidget);
-
-    // And the entry form is no longer changing a record that is gone.
-    await press(tester, find.text('DIVIDEND RATE ENTRY'));
-    expect(find.text('ADD A DIVIDEND RATE'), findsOneWidget);
-    expect(
-      find.text('THE RECORD YOU WERE CHANGING HAS BEEN DELETED.'),
-      findsOneWidget,
-    );
-  });
-
   testWidgets('the inquiry tab and its results lay out when compact', (
     tester,
   ) async {
@@ -841,15 +745,17 @@ void main() {
     await search(tester, ccode: 'ITC', from: '010125', to: '311225');
     await press(tester, find.text('SEE PRICE RANGES (1 FOUND)'));
 
-    // Three short columns used to leave the right half of the block empty,
-    // with the buttons stranded in the middle. The spare width is now shared
-    // out, which pushes the buttons column to the far side.
+    // Three short columns used to leave the right half of the block empty.
+    // The spare width is now shared out between them, so the last column
+    // reaches the far side of the block.
     final table = tester.getRect(find.byType(BrutalTable));
-    final actions = tester.getTopLeft(find.text('ACTIONS'));
-    expect(actions.dx, greaterThan(table.left + table.width * 0.6));
     expect(
       tester.getTopRight(find.text('HIGH VALUE')).dx,
-      lessThan(actions.dx),
+      greaterThan(table.left + table.width * 0.75),
+    );
+    expect(
+      tester.getTopRight(find.text('451')).dx,
+      greaterThan(table.left + table.width * 0.75),
     );
 
     // And the page keeps clear of the window edges.
@@ -974,6 +880,131 @@ void main() {
       tester.widget<Text>(importButton).style?.decoration,
       isNot(TextDecoration.lineThrough),
     );
+  });
+
+  testWidgets('a month inquiry lists every company in that month only', (
+    tester,
+  ) async {
+    await seed(
+      tester,
+      dividends: <DividendRate>[
+        DividendRate(ccode: 'ACME', entryDate: '050826', divRate: 12.5),
+        DividendRate(ccode: 'ZED', entryDate: '280826', divRate: 3.5),
+        DividendRate(ccode: 'ACME', entryDate: '310726', divRate: 7.0),
+        DividendRate(ccode: 'ACME', entryDate: '050825', divRate: 9.0),
+      ],
+      prices: <PriceRange>[
+        PriceRange(
+          ccode: 'ACME',
+          entryDate: '060826',
+          lowVal: 100,
+          highVal: 250,
+        ),
+      ],
+    );
+    await pumpApp(tester);
+    await press(tester, find.text('INQUIRY'));
+
+    await tester.enterText(boxLabelled(monthBlock, 'MONTH'), '08');
+    await tester.enterText(boxLabelled(monthBlock, 'YEAR'), '26');
+    await settle(tester);
+    await press(tester, find.text('SHOW DIVIDEND RATES FOR THIS MONTH'));
+
+    final page = find.byType(DividendMonthPage);
+    expect(page, findsOneWidget);
+    expect(find.text('AUGUST 2026: 2 RECORDS FOUND.'), findsOneWidget);
+
+    Finder onPage(String text) =>
+        find.descendant(of: page, matching: find.text(text));
+    // Both companies, with the company code as a column of its own.
+    expect(onPage('ACME'), findsOneWidget);
+    expect(onPage('ZED'), findsOneWidget);
+    expect(onPage('12.5'), findsOneWidget);
+    expect(onPage('3.5'), findsOneWidget);
+    // July, and the same day a year earlier, are not this month.
+    expect(onPage('7.0'), findsNothing);
+    expect(onPage('9.0'), findsNothing);
+    // Price ranges are not part of this list at all.
+    expect(onPage('250'), findsNothing);
+    expect(onPage('LOW VALUE'), findsNothing);
+
+    await press(tester, find.text('GO BACK TO THE SEARCH'));
+    expect(page, findsNothing);
+  });
+
+  testWidgets('a month inquiry refuses a month outside 01 to 12', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    await press(tester, find.text('INQUIRY'));
+
+    await tester.enterText(boxLabelled(monthBlock, 'MONTH'), '13');
+    await tester.enterText(boxLabelled(monthBlock, 'YEAR'), '26');
+    await settle(tester);
+    await press(tester, find.text('SHOW DIVIDEND RATES FOR THIS MONTH'));
+
+    expect(find.byType(DividendMonthPage), findsNothing);
+    expect(
+      find.text('MONTH IS NOT VALID. IT MUST BE BETWEEN 01 AND 12.'),
+      findsOneWidget,
+    );
+
+    // A missing year is named too, rather than silently doing nothing.
+    await tester.enterText(boxLabelled(monthBlock, 'MONTH'), '08');
+    await tester.enterText(boxLabelled(monthBlock, 'YEAR'), '');
+    await settle(tester);
+    await press(tester, find.text('SHOW DIVIDEND RATES FOR THIS MONTH'));
+    expect(find.byType(DividendMonthPage), findsNothing);
+    expect(find.textContaining('YEAR IS MISSING'), findsOneWidget);
+  });
+
+  testWidgets('no inquiry result offers EDIT or DELETE', (tester) async {
+    await seed(
+      tester,
+      dividends: <DividendRate>[
+        DividendRate(ccode: 'ACME', entryDate: '050826', divRate: 12.5),
+      ],
+      prices: <PriceRange>[
+        PriceRange(
+          ccode: 'ACME',
+          entryDate: '050826',
+          lowVal: 100,
+          highVal: 250,
+        ),
+      ],
+    );
+    await pumpApp(tester);
+
+    // The entry tab's own table still has them - that is where records are
+    // changed - so scope every check to the page being looked at.
+    expect(
+      find.descendant(of: dividendScreen, matching: find.text('EDIT')),
+      findsOneWidget,
+    );
+
+    await search(tester, ccode: 'ACME');
+    for (final button in <String>[
+      'SEE DIVIDEND RATES (1 FOUND)',
+      'SEE PRICE RANGES (1 FOUND)',
+    ]) {
+      await press(tester, find.text(button));
+      final page = find.byType(InquiryResultsPage);
+      expect(page, findsOneWidget);
+      for (final label in <String>[
+        'EDIT',
+        'DELETE',
+        'DELETE THIS ROW',
+        'ACTIONS',
+        'WHAT DO YOU WANT TO DO?',
+      ]) {
+        expect(
+          find.descendant(of: page, matching: find.text(label)),
+          findsNothing,
+          reason: '$label should not be on a results page',
+        );
+      }
+      await press(tester, find.text('GO BACK TO THE SEARCH'));
+    }
   });
 }
 

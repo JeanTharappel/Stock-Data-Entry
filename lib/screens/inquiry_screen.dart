@@ -16,11 +16,14 @@ import '../widgets/ddmmyy_field.dart';
 import 'entry_screen_layout.dart';
 import 'inquiry_results_page.dart';
 
-/// Looks up every record for one company between two dates.
+/// The two ways to look records up:
 ///
-/// This tab only asks the question. The answers open on their own pages - one
-/// for dividend rates, one for price ranges - so each list has the whole
-/// screen to itself.
+/// * one company between two dates, in both files
+/// * one calendar month, dividend rates only, every company
+///
+/// This tab only asks the questions. Every answer opens on its own page, so
+/// each list has the whole screen to itself, and all of them are read-only -
+/// records are changed on the entry tabs.
 class InquiryScreen extends ConsumerStatefulWidget {
   const InquiryScreen({super.key});
 
@@ -32,6 +35,8 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
   final TextEditingController _ccodeController = TextEditingController();
   final DdmmyyController _fromController = DdmmyyController();
   final DdmmyyController _toController = DdmmyyController();
+  final TextEditingController _monthController = TextEditingController();
+  final TextEditingController _monthYearController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
   /// The results column's own scroll position, used in the compact layout.
@@ -40,6 +45,8 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
   String? _ccodeError;
   String? _fromError;
   String? _toError;
+  String? _monthError;
+  String? _monthYearError;
 
   /// Same rule as the entry forms: errors stay hidden until the first press of
   /// SHOW RECORDS, then follow along live.
@@ -55,6 +62,8 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
     _ccodeController.dispose();
     _fromController.dispose();
     _toController.dispose();
+    _monthController.dispose();
+    _monthYearController.dispose();
     _scrollController.dispose();
     _resultsScrollController.dispose();
     super.dispose();
@@ -140,6 +149,37 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
     });
   }
 
+  /// The month search. Its answer is a single list, so it opens straight
+  /// away rather than reporting a count first the way the company search
+  /// does with its two files.
+  void _searchMonth() {
+    final monthError = Validators.monthNumber(_monthController.text);
+    final yearError = Validators.yearTwoDigits(_monthYearController.text);
+    setState(() {
+      _monthError = monthError;
+      _monthYearError = yearError;
+    });
+    if (monthError != null || yearError != null) return;
+
+    _open(
+      DividendMonthPage(
+        month: MonthInquiry(
+          month: int.parse(_monthController.text.trim()),
+          twoDigitYear: int.parse(_monthYearController.text.trim()),
+        ),
+      ),
+    );
+  }
+
+  void _clearMonth() {
+    _monthController.clear();
+    _monthYearController.clear();
+    setState(() {
+      _monthError = null;
+      _monthYearError = null;
+    });
+  }
+
   void _open(Widget page) {
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
   }
@@ -151,7 +191,16 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
   @override
   Widget build(BuildContext context) {
     final skin = BrutalSkin.of(context);
-    final form = _buildForm(skin);
+    final form = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        _buildCompanyForm(skin),
+        BrutalGap(
+          skin.sizes.isCompact ? skin.sizes.gap : skin.sizes.gapSection,
+        ),
+        _buildMonthForm(skin),
+      ],
+    );
     final results = _buildResults(skin);
 
     if (skin.sizes.isCompact) {
@@ -206,11 +255,12 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
     );
   }
 
-  Widget _buildForm(BrutalSkinData skin) {
+  /// One company, between two dates, in both files.
+  Widget _buildCompanyForm(BrutalSkinData skin) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        const BrutalSectionHeader('LOOK UP A COMPANY'),
+        const BrutalSectionHeader('LOOK UP ONE COMPANY'),
         BrutalPanel(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -283,13 +333,98 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
     );
   }
 
+  /// One month, dividend rates only.
+  Widget _buildMonthForm(BrutalSkinData skin) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const BrutalSectionHeader('LOOK UP A MONTH'),
+        BrutalPanel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              if (!skin.sizes.isCompact) ...<Widget>[
+                Text(
+                  'SHOWS THE DIVIDEND RATES FOR EVERY COMPANY IN ONE MONTH. '
+                  'PRICE RANGES ARE NOT INCLUDED.',
+                  style: skin.text.body,
+                ),
+                BrutalGap(skin.sizes.gapLarge),
+              ],
+              Wrap(
+                spacing: skin.sizes.gap,
+                runSpacing: skin.sizes.gap,
+                children: <Widget>[
+                  SizedBox(
+                    width: skin.sizes.datePartWidth,
+                    child: BrutalTextField(
+                      label: 'MONTH',
+                      hint: 'E.G. 08',
+                      controller: _monthController,
+                      maxLength: 2,
+                      textAlign: TextAlign.center,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: <TextInputFormatter>[
+                        FilteringTextInputFormatter.digitsOnly,
+                      ],
+                    ),
+                  ),
+                  SizedBox(
+                    width: skin.sizes.datePartWidth,
+                    child: BrutalTextField(
+                      label: 'YEAR',
+                      hint: 'E.G. 26',
+                      controller: _monthYearController,
+                      maxLength: 2,
+                      textAlign: TextAlign.center,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: <TextInputFormatter>[
+                        FilteringTextInputFormatter.digitsOnly,
+                      ],
+                      onSubmitted: (_) => _searchMonth(),
+                    ),
+                  ),
+                ],
+              ),
+              if (_monthError != null) ...<Widget>[
+                BrutalGap(skin.sizes.gapSmall),
+                BrutalNotice(message: _monthError!),
+              ],
+              if (_monthYearError != null) ...<Widget>[
+                BrutalGap(skin.sizes.gapSmall),
+                BrutalNotice(message: _monthYearError!),
+              ],
+              BrutalGap(skin.sizes.gapSection),
+              Wrap(
+                spacing: skin.sizes.gap,
+                runSpacing: skin.sizes.gap,
+                children: <Widget>[
+                  BrutalButton(
+                    label: 'SHOW DIVIDEND RATES FOR THIS MONTH',
+                    icon: Icons.search,
+                    onPressed: _searchMonth,
+                  ),
+                  BrutalButton(
+                    label: 'CLEAR THE MONTH',
+                    style: BrutalButtonStyle.secondary,
+                    onPressed: _clearMonth,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildResults(BrutalSkinData skin) {
     final criteria = _criteria;
     if (criteria == null) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const BrutalSectionHeader('WHAT WAS FOUND'),
+          const BrutalSectionHeader('WHAT WAS FOUND FOR THE COMPANY'),
           BrutalPanel(
             child: Text(
               'TYPE A COMPANY CODE AND THE TWO DATES, THEN PRESS SHOW '
@@ -315,7 +450,7 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        const BrutalSectionHeader('WHAT WAS FOUND'),
+        const BrutalSectionHeader('WHAT WAS FOUND FOR THE COMPANY'),
         BrutalPanel(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

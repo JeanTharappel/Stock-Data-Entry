@@ -16,16 +16,18 @@ class BrutalColumn {
 }
 
 /// One row of a [BrutalTable]. [cells] must line up with the column list.
+///
+/// Leave [onEdit] and [onDelete] off for a list that is only there to be
+/// read. When no row in a table has either, the buttons column is dropped
+/// and the data spreads across the space it would have taken.
 class BrutalRowData {
-  const BrutalRowData({
-    required this.cells,
-    required this.onEdit,
-    required this.onDelete,
-  });
+  const BrutalRowData({required this.cells, this.onEdit, this.onDelete});
 
   final List<String> cells;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+
+  bool get hasActions => onEdit != null || onDelete != null;
 }
 
 /// A flat data table.
@@ -33,8 +35,9 @@ class BrutalRowData {
 ///   * column headings are inverted text on a solid bar
 ///   * rows meet the density's minimum height with a solid rule between them
 ///   * alternate rows use one flat shade - no stripes, no gradients
-///   * every row ends with EDIT and DELETE buttons that say so in words;
-///     there are no icon-only row actions and nothing swipes away
+///   * where rows can be acted on, every row ends with EDIT and DELETE
+///     buttons that say so in words; there are no icon-only row actions and
+///     nothing swipes away
 ///
 /// The table scrolls sideways as one piece on a narrow window rather than
 /// squeezing the text down, and scrolls up and down inside itself when the
@@ -109,11 +112,14 @@ class _BrutalTableState extends State<BrutalTable> {
     // simply gets wider and scrolls sideways.
     final scale = MediaQuery.textScalerOf(context).scale(20) / 20;
     final columnScale = scale * (skin.sizes.isCompact ? 0.82 : 1.0);
-    final actionsWidth =
-        (skin.sizes.isCompact
-            ? widget.compactActionsWidth
-            : widget.actionsWidth) *
-        scale;
+    // A read-only table has no buttons column at all.
+    final showActions = widget.rows.any((row) => row.hasActions);
+    final actionsWidth = !showActions
+        ? 0.0
+        : (skin.sizes.isCompact
+                  ? widget.compactActionsWidth
+                  : widget.actionsWidth) *
+              scale;
     // The edge padding inside the header and each row has to be counted, or
     // the cells add up to more room than the table actually offers them.
     final edge = skin.sizes.gapSmall;
@@ -214,16 +220,17 @@ class _BrutalTableState extends State<BrutalTable> {
                 ),
               ),
             ),
-          SizedBox(
-            width: actionsWidth,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: Text(
-                skin.sizes.isCompact ? 'ACTIONS' : 'WHAT DO YOU WANT TO DO?',
-                style: skin.text.tableHeader,
+          if (actionsWidth > 0)
+            SizedBox(
+              width: actionsWidth,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Text(
+                  skin.sizes.isCompact ? 'ACTIONS' : 'WHAT DO YOU WANT TO DO?',
+                  style: skin.text.tableHeader,
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -270,38 +277,42 @@ class _BrutalTableState extends State<BrutalTable> {
                 ),
               ),
             ),
-          SizedBox(
-            width: actionsWidth,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              // Flexible rather than fixed: if a large text setting makes the
-              // labels wider than the column, they wrap inside their buttons
-              // instead of spilling out of the row.
-              child: Row(
-                children: <Widget>[
-                  Flexible(
-                    child: BrutalButton(
-                      label: 'EDIT',
-                      compact: true,
-                      style: BrutalButtonStyle.secondary,
-                      onPressed: row.onEdit,
-                    ),
-                  ),
-                  const BrutalGap.horizontal(),
-                  Flexible(
-                    child: BrutalButton(
-                      label: skin.sizes.isCompact
-                          ? 'DELETE'
-                          : 'DELETE THIS ROW',
-                      compact: true,
-                      style: BrutalButtonStyle.danger,
-                      onPressed: row.onDelete,
-                    ),
-                  ),
-                ],
+          if (actionsWidth > 0)
+            SizedBox(
+              width: actionsWidth,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                // Flexible rather than fixed: if a large text setting makes
+                // the labels wider than the column, they wrap inside their
+                // buttons instead of spilling out of the row.
+                child: Row(
+                  children: <Widget>[
+                    if (row.onEdit != null)
+                      Flexible(
+                        child: BrutalButton(
+                          label: 'EDIT',
+                          compact: true,
+                          style: BrutalButtonStyle.secondary,
+                          onPressed: row.onEdit,
+                        ),
+                      ),
+                    if (row.onEdit != null && row.onDelete != null)
+                      const BrutalGap.horizontal(),
+                    if (row.onDelete != null)
+                      Flexible(
+                        child: BrutalButton(
+                          label: skin.sizes.isCompact
+                              ? 'DELETE'
+                              : 'DELETE THIS ROW',
+                          compact: true,
+                          style: BrutalButtonStyle.danger,
+                          onPressed: row.onDelete,
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );

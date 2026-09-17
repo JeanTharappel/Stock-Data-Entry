@@ -6,7 +6,6 @@ import '../core/ddmmyy.dart';
 import '../core/record_spec.dart';
 import '../core/validators.dart';
 import '../data/dividend_rate_controller.dart';
-import '../data/navigation.dart';
 import '../export/export_service.dart';
 import '../import/import_service.dart';
 import '../models/dividend_rate.dart';
@@ -226,19 +225,9 @@ class _DividendRateScreenState extends ConsumerState<DividendRateScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // EDIT pressed on the inquiry tab's results: load that record here.
-    ref.listen<EditRequest?>(editRequestProvider, (_, request) {
-      if (request == null || request.tab != HomeTab.dividendEntry) return;
-      final record = ref
-          .read(dividendRateControllerProvider)
-          .where((record) => record.key == request.key)
-          .firstOrNull;
-      if (record != null) _startEditing(record);
-    });
-
-    // The record in the form can be deleted from somewhere else - the inquiry
-    // results, or its own row. Saving would then quietly do nothing, so the
-    // form lets go of it straight away.
+    // Deleting the row that is loaded into the form would leave it editing a
+    // record that no longer exists, and saving would quietly do nothing. So
+    // the form lets go of it as soon as it is gone.
     ref.listen<List<DividendRate>>(dividendRateControllerProvider, (
       _,
       records,

@@ -29,6 +29,9 @@ const List<String> _monthNames = <String>[
 /// Turns a 2-digit year into a 4-digit year using [kCenturyPivot].
 int expandYear(int yy) => yy <= kCenturyPivot ? 2000 + yy : 1900 + yy;
 
+/// The name of month [month], where 1 is JANUARY.
+String monthName(int month) => _monthNames[month - 1];
+
 /// Parses `DDMMYY` into a real [DateTime], or returns `null` when the string
 /// is not exactly 6 digits or does not describe a date that actually exists
 /// (e.g. `310226`, `000000`, `321299`).

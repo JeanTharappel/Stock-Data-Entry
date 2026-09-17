@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/ddmmyy.dart';
 import '../core/record_spec.dart';
 import '../core/validators.dart';
-import '../data/navigation.dart';
 import '../data/price_range_controller.dart';
 import '../export/export_service.dart';
 import '../import/import_service.dart';
@@ -251,16 +250,7 @@ class _PriceRangeScreenState extends ConsumerState<PriceRangeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // See DividendRateScreen.build - the two listeners do the same job here.
-    ref.listen<EditRequest?>(editRequestProvider, (_, request) {
-      if (request == null || request.tab != HomeTab.priceEntry) return;
-      final record = ref
-          .read(priceRangeControllerProvider)
-          .where((record) => record.key == request.key)
-          .firstOrNull;
-      if (record != null) _startEditing(record);
-    });
-
+    // See DividendRateScreen.build - this listener does the same job here.
     ref.listen<List<PriceRange>>(priceRangeControllerProvider, (_, records) {
       if (!_isEditing || records.any((record) => record.key == _editingKey)) {
         return;

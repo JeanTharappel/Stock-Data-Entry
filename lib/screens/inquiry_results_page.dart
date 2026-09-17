@@ -5,20 +5,18 @@ import '../core/ddmmyy.dart';
 import '../core/inquiry.dart';
 import '../core/record_spec.dart';
 import '../data/dividend_rate_controller.dart';
-import '../data/navigation.dart';
 import '../data/price_range_controller.dart';
 import '../theme/brutal_skin.dart';
 import '../widgets/brutal_blocks.dart';
 import '../widgets/brutal_button.dart';
 import '../widgets/brutal_table.dart';
 import 'entry_screen_layout.dart';
-import 'record_deletion.dart';
 
-/// The dividend rates found by an inquiry: date and rate only.
+/// The dividend rates found by a company inquiry: date and rate only.
 ///
-/// EDIT does not open a form here. It closes this page and loads the record
-/// into the DIVIDEND RATE ENTRY tab, so there is still only one form that can
-/// change a dividend rate.
+/// Read-only, like every inquiry result. Records are added, changed and
+/// deleted on the entry tabs, which keeps one form per record type and no
+/// destructive button on a page people come to in order to look something up.
 class DividendInquiryPage extends ConsumerWidget {
   const DividendInquiryPage({super.key, required this.criteria});
 
@@ -26,7 +24,7 @@ class DividendInquiryPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Watched, so a deleted row disappears from the list at once.
+    // Watched, so a record changed on an entry tab is right here too.
     final records = ref
         .watch(dividendRateControllerProvider)
         .where((r) => criteria.matches(ccode: r.ccode, entryDate: r.entryDate))
@@ -34,7 +32,7 @@ class DividendInquiryPage extends ConsumerWidget {
 
     return InquiryResultsPage(
       title: 'DIVIDEND RATES',
-      criteria: criteria,
+      summary: criteria.describe(),
       recordCount: records.length,
       table: BrutalTable(
         bordered: false,
@@ -49,14 +47,6 @@ class DividendInquiryPage extends ConsumerWidget {
                 shortSpellOutDdmmyy(record.entryDate),
                 record.divRate.toStringAsFixed(DividendRateSpec.rateDecimals),
               ],
-              onEdit: () {
-                Navigator.of(context).pop();
-                ref
-                    .read(editRequestProvider.notifier)
-                    .request(HomeTab.dividendEntry, record.key!);
-              },
-              onDelete: () =>
-                  confirmAndDeleteDividendRate(context, ref, record),
             ),
         ],
         emptyMessage: 'THERE ARE NO DIVIDEND RATES FOR ${criteria.describe()}.',
@@ -65,8 +55,8 @@ class DividendInquiryPage extends ConsumerWidget {
   }
 }
 
-/// The price ranges found by an inquiry: date, low value and high value.
-/// See [DividendInquiryPage] for how EDIT and DELETE behave.
+/// The price ranges found by a company inquiry: date, low value and high
+/// value. Read-only, like [DividendInquiryPage].
 class PriceInquiryPage extends ConsumerWidget {
   const PriceInquiryPage({super.key, required this.criteria});
 
@@ -81,7 +71,7 @@ class PriceInquiryPage extends ConsumerWidget {
 
     return InquiryResultsPage(
       title: 'PRICE RANGES',
-      criteria: criteria,
+      summary: criteria.describe(),
       recordCount: records.length,
       table: BrutalTable(
         bordered: false,
@@ -98,13 +88,6 @@ class PriceInquiryPage extends ConsumerWidget {
                 record.lowVal.toString(),
                 record.highVal.toString(),
               ],
-              onEdit: () {
-                Navigator.of(context).pop();
-                ref
-                    .read(editRequestProvider.notifier)
-                    .request(HomeTab.priceEntry, record.key!);
-              },
-              onDelete: () => confirmAndDeletePriceRange(context, ref, record),
             ),
         ],
         emptyMessage: 'THERE ARE NO PRICE RANGES FOR ${criteria.describe()}.',
@@ -113,7 +96,52 @@ class PriceInquiryPage extends ConsumerWidget {
   }
 }
 
-/// The page both result lists sit on: a GO BACK button, a line saying what was
+/// Every company's dividend rates for one calendar month.
+///
+/// The company code is a column here rather than something searched for -
+/// this list is "who paid what in August", so it is read down the page.
+class DividendMonthPage extends ConsumerWidget {
+  const DividendMonthPage({super.key, required this.month});
+
+  final MonthInquiry month;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final records = ref
+        .watch(dividendRateControllerProvider)
+        .where((record) => month.matches(record.entryDate))
+        .toList();
+
+    return InquiryResultsPage(
+      title: 'DIVIDEND RATES',
+      summary: month.describe(),
+      recordCount: records.length,
+      table: BrutalTable(
+        bordered: false,
+        columns: const <BrutalColumn>[
+          BrutalColumn('COMPANY CODE', 220),
+          BrutalColumn('DATE', 250),
+          BrutalColumn('DIVIDEND RATE', 200, alignRight: true),
+        ],
+        rows: <BrutalRowData>[
+          for (final record in records)
+            BrutalRowData(
+              cells: <String>[
+                record.ccode,
+                shortSpellOutDdmmyy(record.entryDate),
+                record.divRate.toStringAsFixed(DividendRateSpec.rateDecimals),
+              ],
+            ),
+        ],
+        emptyMessage:
+            'THERE ARE NO DIVIDEND RATES FOR ${month.describe()}.\n'
+            'THEY ARE ADDED ON THE DIVIDEND RATE ENTRY TAB.',
+      ),
+    );
+  }
+}
+
+/// The page every result list sits on: a GO BACK button, a line saying what was
 /// searched for and how much was found, then the table.
 ///
 /// Laid out the same two ways as the entry tabs: in BIG TEXT the whole page
@@ -123,13 +151,15 @@ class InquiryResultsPage extends StatefulWidget {
   const InquiryResultsPage({
     super.key,
     required this.title,
-    required this.criteria,
+    required this.summary,
     required this.recordCount,
     required this.table,
   });
 
   final String title;
-  final InquiryCriteria criteria;
+
+  /// What was searched for, in words, shown above the table.
+  final String summary;
   final int recordCount;
   final Widget table;
 
@@ -169,7 +199,7 @@ class _InquiryResultsPageState extends State<InquiryResultsPage> {
       ),
       BrutalGap(skin.sizes.gap),
       BrutalNotice(
-        message: '${widget.criteria.describe()}: $found.',
+        message: '${widget.summary}: $found.',
         kind: NoticeKind.info,
         textStyle: skin.text.count,
       ),

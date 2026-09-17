@@ -151,6 +151,58 @@ void main() {
     });
   });
 
+  group('month inquiry', () {
+    final august2026 = MonthInquiry(month: 8, twoDigitYear: 26);
+
+    test('takes every company, on any day of that month', () {
+      expect(august2026.matches('010826'), isTrue);
+      expect(august2026.matches('310826'), isTrue);
+      expect(august2026.matches('050826'), isTrue);
+    });
+
+    test('leaves out the months either side and the same month elsewhere', () {
+      expect(august2026.matches('310726'), isFalse);
+      expect(august2026.matches('010926'), isFalse);
+      expect(august2026.matches('050825'), isFalse); // August, wrong year
+    });
+
+    test('widens the 2-digit year the same way the rest of the app does', () {
+      expect(MonthInquiry(month: 12, twoDigitYear: 99).year, 1999);
+      expect(MonthInquiry(month: 1, twoDigitYear: 69).year, 2069);
+      expect(
+        MonthInquiry(month: 12, twoDigitYear: 99).matches('311299'),
+        isTrue,
+      );
+    });
+
+    test('never matches a stored date it cannot read', () {
+      expect(august2026.matches('BADBAD'), isFalse);
+    });
+
+    test('describes itself in words', () {
+      expect(august2026.describe(), 'AUGUST 2026');
+      expect(
+        MonthInquiry(month: 1, twoDigitYear: 26).describe(),
+        'JANUARY 2026',
+      );
+    });
+
+    test('the month and year boxes are validated on their own', () {
+      expect(Validators.monthNumber('08'), isNull);
+      expect(Validators.monthNumber('1'), isNull);
+      expect(Validators.monthNumber('12'), isNull);
+      expect(Validators.monthNumber('00'), isNotNull);
+      expect(Validators.monthNumber('13'), isNotNull);
+      expect(Validators.monthNumber(''), startsWith('MONTH IS MISSING.'));
+      expect(Validators.monthNumber('AUG'), isNotNull);
+
+      expect(Validators.yearTwoDigits('26'), isNull);
+      expect(Validators.yearTwoDigits('99'), isNull);
+      expect(Validators.yearTwoDigits(''), startsWith('YEAR IS MISSING.'));
+      expect(Validators.yearTwoDigits('2026'), isNotNull);
+    });
+  });
+
   group('fixed-width padding', () {
     test('alphanumeric fields pad on the right', () {
       expect(padAlpha('ACME', 10), 'ACME      ');
