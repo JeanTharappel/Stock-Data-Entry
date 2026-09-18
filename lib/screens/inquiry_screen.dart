@@ -16,9 +16,9 @@ import '../widgets/ddmmyy_field.dart';
 import 'entry_screen_layout.dart';
 import 'inquiry_results_page.dart';
 
-/// The two ways to look records up:
+/// The ways to look records up:
 ///
-/// * one company between two dates, in both files
+/// * one company, either for a whole year or between two dates, in both files
 /// * one calendar month, dividend rates only, every company
 ///
 /// This tab only asks the questions. Every answer opens on its own page, so
@@ -35,6 +35,7 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
   final TextEditingController _ccodeController = TextEditingController();
   final DdmmyyController _fromController = DdmmyyController();
   final DdmmyyController _toController = DdmmyyController();
+  final TextEditingController _yearController = TextEditingController();
   final TextEditingController _monthController = TextEditingController();
   final TextEditingController _monthYearController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -43,6 +44,7 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
   final ScrollController _resultsScrollController = ScrollController();
 
   String? _ccodeError;
+  String? _yearError;
   String? _fromError;
   String? _toError;
   String? _monthError;
@@ -62,6 +64,7 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
     _ccodeController.dispose();
     _fromController.dispose();
     _toController.dispose();
+    _yearController.dispose();
     _monthController.dispose();
     _monthYearController.dispose();
     _scrollController.dispose();
@@ -72,6 +75,12 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
   // ---------------------------------------------------------------------------
   // VALIDATION
   // ---------------------------------------------------------------------------
+
+  /// The company code, which both ways of searching need.
+  String? _validateCcode() => Validators.ccode(
+    _ccodeController.text,
+    maxLength: DividendRateSpec.ccodeWidth,
+  );
 
   bool _validate() {
     final ccodeError = Validators.ccode(
@@ -109,6 +118,7 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
   }
 
   void _revalidateIfSubmitted() {
+    setState(() => _yearError = null);
     if (_submitted) {
       _validate();
     } else {
@@ -136,13 +146,41 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
     });
   }
 
+  /// The whole-year search. The year fills in the two dates, so from here on
+  /// there is only one kind of search to follow.
+  void _searchYear() {
+    final ccodeError = _validateCcode();
+    final yearError = Validators.yearTwoDigits(_yearController.text);
+    setState(() {
+      _submitted = true;
+      _ccodeError = ccodeError;
+      _yearError = yearError;
+      // The date boxes are not part of this search, so any complaint about
+      // them is stale the moment the year button is pressed.
+      _fromError = null;
+      _toError = null;
+    });
+    if (ccodeError != null || yearError != null) {
+      setState(() => _criteria = null);
+      return;
+    }
+    setState(() {
+      _criteria = InquiryCriteria.forYear(
+        ccode: _ccodeController.text,
+        twoDigitYear: int.parse(_yearController.text.trim()),
+      );
+    });
+  }
+
   void _clear() {
     _ccodeController.clear();
+    _yearController.clear();
     _fromController.clear();
     _toController.clear();
     setState(() {
       _submitted = false;
       _ccodeError = null;
+      _yearError = null;
       _fromError = null;
       _toError = null;
       _criteria = null;
@@ -289,10 +327,54 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
                     UpperCaseTextFormatter(),
                   ],
                   onChanged: (_) => _revalidateIfSubmitted(),
-                  onSubmitted: (_) => _search(),
                 ),
               ),
               BrutalGap(skin.sizes.gapLarge),
+
+              // Two ways to say which records, one under the other. Whichever
+              // button is pressed decides which boxes are read, so there is no
+              // mode to set first and nothing is hidden from view.
+              _WaySeparator(label: 'A WHOLE YEAR'),
+              BrutalGap(skin.sizes.gapSmall),
+              Wrap(
+                spacing: skin.sizes.gap,
+                runSpacing: skin.sizes.gap,
+                crossAxisAlignment: WrapCrossAlignment.end,
+                children: <Widget>[
+                  SizedBox(
+                    width: skin.sizes.datePartWidth,
+                    child: BrutalTextField(
+                      label: 'YEAR',
+                      hint: 'E.G. 26',
+                      controller: _yearController,
+                      maxLength: 2,
+                      textAlign: TextAlign.center,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: <TextInputFormatter>[
+                        FilteringTextInputFormatter.digitsOnly,
+                      ],
+                      onSubmitted: (_) => _searchYear(),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: BrutalButton(
+                      label: 'SHOW THE WHOLE YEAR',
+                      icon: Icons.search,
+                      compact: skin.sizes.isCompact,
+                      onPressed: _searchYear,
+                    ),
+                  ),
+                ],
+              ),
+              if (_yearError != null) ...<Widget>[
+                BrutalGap(skin.sizes.gapSmall),
+                BrutalNotice(message: _yearError!),
+              ],
+              BrutalGap(skin.sizes.gapLarge),
+
+              _WaySeparator(label: 'OR BETWEEN TWO DATES'),
+              BrutalGap(skin.sizes.gapSmall),
 
               DdmmyyField(
                 label: 'FROM DATE',
@@ -315,7 +397,7 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
                 runSpacing: skin.sizes.gap,
                 children: <Widget>[
                   BrutalButton(
-                    label: 'SHOW RECORDS',
+                    label: 'SHOW BETWEEN THESE DATES',
                     icon: Icons.search,
                     onPressed: _search,
                   ),
@@ -427,8 +509,9 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
           const BrutalSectionHeader('WHAT WAS FOUND FOR THE COMPANY'),
           BrutalPanel(
             child: Text(
-              'TYPE A COMPANY CODE AND THE TWO DATES, THEN PRESS SHOW '
-              'RECORDS.',
+              'TYPE A COMPANY CODE. THEN EITHER TYPE A YEAR AND PRESS SHOW '
+              'THE WHOLE YEAR, OR TYPE THE TWO DATES AND PRESS SHOW BETWEEN '
+              'THESE DATES.',
               style: skin.text.bodyBold,
             ),
           ),
@@ -491,4 +574,29 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
     0 => 'NONE FOUND',
     _ => '$count FOUND',
   };
+}
+
+/// A heading inside a panel, marking one of the two ways to search.
+///
+/// A rule across the panel with its label at the left - enough to group the
+/// boxes under it without looking like another section of the page.
+class _WaySeparator extends StatelessWidget {
+  const _WaySeparator({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = BrutalSkin.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: <Widget>[
+        Text(label, style: skin.text.fieldLabel),
+        SizedBox(width: skin.sizes.gapSmall),
+        Expanded(
+          child: Container(height: skin.sizes.border, color: skin.colors.ink),
+        ),
+      ],
+    );
+  }
 }

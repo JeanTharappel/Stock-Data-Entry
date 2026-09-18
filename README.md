@@ -27,13 +27,15 @@ screen actually does.
   and DELETE buttons on every row (full words, never icon-only). The same
   table, without those buttons, shows the inquiry results.
 - **Delete confirmation** — a plain yes/no modal, no swipe-to-delete.
-- **Inquiry tab**, with two searches. **One company**: a company code and a
-  FROM and TO date shows how many dividend rates and price ranges fall in
-  that range, each list opening on its own page (dividend: date and rate;
-  price: date, low and high). **One month**: a month and year as `MM` and
-  `YY` lists every company's dividend rates for that month — dividend records
-  only. Every result page is read-only; records are added, changed and
-  deleted on the entry tabs.
+- **Inquiry tab**, with two searches. **One company**: a company code, then
+  either a `YY` year for the whole of that year or a FROM and TO date for any
+  other span — whichever button is pressed decides which boxes are read. It
+  shows how many dividend rates and price ranges were found, each list
+  opening on its own page (dividend: date and rate; price: date, low and
+  high). **One month**: a month and year as `MM` and `YY` lists every
+  company's dividend rates for that month — dividend records only. Every
+  result page is read-only; records are added, changed and deleted on the
+  entry tabs.
 - **Duplicate-record warning** — saving a company code + date combination
   that already exists asks for confirmation before creating a second one.
 - **Export as CSV, XLSX, or TXT**, triggered as a browser download. CSV and

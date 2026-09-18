@@ -1,6 +1,6 @@
 import 'ddmmyy.dart';
 
-/// What the INQUIRY tab searches for: one company, between two dates.
+/// What the company inquiry searches for: one company, between two dates.
 ///
 /// Both dates are inclusive, so FROM 01/01/26 TO 31/12/26 is the whole of
 /// 2026. Matching compares real calendar dates, not the `DDMMYY` text - as
@@ -10,10 +10,25 @@ class InquiryCriteria {
     required String ccode,
     required this.fromDate,
     required this.toDate,
-  }) : ccode = ccode.trim().toUpperCase();
+  }) : ccode = ccode.trim().toUpperCase(),
+       wholeYear = null;
+
+  /// A whole calendar year, from its 1st of January to its 31st of December.
+  ///
+  /// There is no second kind of search behind this - it is the same two
+  /// dates, filled in from the year. Only how it describes itself differs.
+  InquiryCriteria.forYear({required String ccode, required int twoDigitYear})
+    : ccode = ccode.trim().toUpperCase(),
+      wholeYear = expandYear(twoDigitYear),
+      fromDate = composeDdmmyy('01', '01', '$twoDigitYear'),
+      toDate = composeDdmmyy('31', '12', '$twoDigitYear');
 
   /// Company code, upper-case to match how records are stored.
   final String ccode;
+
+  /// The 4-digit year when the search was asked for as a year rather than as
+  /// two dates. Only used to describe the search back to the reader.
+  final int? wholeYear;
 
   /// First date to include, as `DDMMYY`.
   final String fromDate;
@@ -32,9 +47,11 @@ class InquiryCriteria {
     return !date.isBefore(from) && !date.isAfter(to);
   }
 
-  /// The search in words, e.g. `ACME FROM 01 JANUARY 2026 TO 31 DECEMBER 2026`.
-  String describe() =>
-      '$ccode FROM ${spellOutDdmmyy(fromDate)} TO ${spellOutDdmmyy(toDate)}';
+  /// The search in words: `ACME IN 2026` for a whole year, or
+  /// `ACME FROM 01 JANUARY 2026 TO 31 DECEMBER 2026` for two dates.
+  String describe() => wholeYear != null
+      ? '$ccode IN $wholeYear'
+      : '$ccode FROM ${spellOutDdmmyy(fromDate)} TO ${spellOutDdmmyy(toDate)}';
 }
 
 /// The other inquiry: one calendar month, every company.

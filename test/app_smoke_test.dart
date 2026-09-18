@@ -152,15 +152,19 @@ void main() {
   }
 
   /// The text box belonging to the field whose black label reads [label].
+  /// When more than one field on the screen carries that label, the first is
+  /// used - the boxes are laid out in the order they are read.
   /// Scoped to one screen because the other tab stays built in the
   /// [IndexedStack] and carries its own COMPANY CODE and DATE fields.
-  Finder boxLabelled(Finder screen, String label) => find.descendant(
-    of: find.ancestor(
-      of: find.descendant(of: screen, matching: find.text(label)),
-      matching: find.byType(BrutalTextField),
-    ),
-    matching: find.byType(TextField),
-  );
+  Finder boxLabelled(Finder screen, String label) => find
+      .descendant(
+        of: find.ancestor(
+          of: find.descendant(of: screen, matching: find.text(label)),
+          matching: find.byType(BrutalTextField),
+        ),
+        matching: find.byType(TextField),
+      )
+      .first;
 
   final Finder dividendScreen = find.byType(DividendRateScreen);
   final Finder priceScreen = find.byType(PriceRangeScreen);
@@ -215,7 +219,20 @@ void main() {
     await fillDate('FROM DATE', from);
     await fillDate('TO DATE', to);
     await settle(tester);
-    await press(tester, find.text('SHOW RECORDS'));
+    await press(tester, find.text('SHOW BETWEEN THESE DATES'));
+  }
+
+  /// The other way to ask the same question: the company and a year.
+  Future<void> searchYear(
+    WidgetTester tester, {
+    required String ccode,
+    required String year,
+  }) async {
+    await press(tester, find.text('INQUIRY'));
+    await tester.enterText(boxLabelled(inquiryScreen, 'COMPANY CODE'), ccode);
+    await tester.enterText(boxLabelled(inquiryScreen, 'YEAR'), year);
+    await settle(tester);
+    await press(tester, find.text('SHOW THE WHOLE YEAR'));
   }
 
   Future<void> fillDividendForm(
@@ -1005,6 +1022,89 @@ void main() {
       }
       await press(tester, find.text('GO BACK TO THE SEARCH'));
     }
+  });
+
+  testWidgets('a year finds the same records as that year as two dates', (
+    tester,
+  ) async {
+    await seed(
+      tester,
+      dividends: <DividendRate>[
+        DividendRate(ccode: 'ACME', entryDate: '010126', divRate: 1.0),
+        DividendRate(ccode: 'ACME', entryDate: '311226', divRate: 2.0),
+        DividendRate(ccode: 'ACME', entryDate: '311225', divRate: 3.0),
+        DividendRate(ccode: 'ACME', entryDate: '010127', divRate: 4.0),
+        DividendRate(ccode: 'OTHER', entryDate: '050826', divRate: 5.0),
+      ],
+      prices: <PriceRange>[
+        PriceRange(
+          ccode: 'ACME',
+          entryDate: '050826',
+          lowVal: 100,
+          highVal: 250,
+        ),
+      ],
+    );
+    await pumpApp(tester);
+    await searchYear(tester, ccode: 'acme', year: '26');
+
+    // Described as the year that was asked for, not as two dates.
+    expect(find.text('SHOWING ACME IN 2026.'), findsOneWidget);
+    expect(find.text('SEE DIVIDEND RATES (2 FOUND)'), findsOneWidget);
+    expect(find.text('SEE PRICE RANGES (1 FOUND)'), findsOneWidget);
+
+    await press(tester, find.text('SEE DIVIDEND RATES (2 FOUND)'));
+    final page = find.byType(DividendInquiryPage);
+    expect(find.text('ACME IN 2026: 2 RECORDS FOUND.'), findsOneWidget);
+    Finder onPage(String text) =>
+        find.descendant(of: page, matching: find.text(text));
+    // The first and last days of the year are both in.
+    expect(onPage('1.0'), findsOneWidget);
+    expect(onPage('2.0'), findsOneWidget);
+    // The day either side of it, and another company, are not.
+    expect(onPage('3.0'), findsNothing);
+    expect(onPage('4.0'), findsNothing);
+    expect(onPage('5.0'), findsNothing);
+    await press(tester, find.text('GO BACK TO THE SEARCH'));
+
+    // The same search typed as two dates gives the same counts.
+    await search(tester, ccode: 'ACME', from: '010126', to: '311226');
+    expect(find.text('SEE DIVIDEND RATES (2 FOUND)'), findsOneWidget);
+    expect(
+      find.text('SHOWING ACME FROM 01 JANUARY 2026 TO 31 DECEMBER 2026.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the year search still needs a company code and a real year', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    await press(tester, find.text('INQUIRY'));
+
+    // No company code.
+    await tester.enterText(boxLabelled(inquiryScreen, 'YEAR'), '26');
+    await settle(tester);
+    await press(tester, find.text('SHOW THE WHOLE YEAR'));
+    expect(find.textContaining('COMPANY CODE IS MISSING'), findsOneWidget);
+    expect(find.textContaining('SEE DIVIDEND RATES'), findsNothing);
+
+    // No year.
+    await tester.enterText(boxLabelled(inquiryScreen, 'COMPANY CODE'), 'ACME');
+    await tester.enterText(boxLabelled(inquiryScreen, 'YEAR'), '');
+    await settle(tester);
+    await press(tester, find.text('SHOW THE WHOLE YEAR'));
+    expect(find.textContaining('YEAR IS MISSING'), findsOneWidget);
+    expect(find.textContaining('SEE DIVIDEND RATES'), findsNothing);
+
+    // Empty date boxes are not complained about - they belong to the other
+    // button, which was not pressed.
+    expect(find.textContaining('FROM DATE IS MISSING'), findsNothing);
+
+    await tester.enterText(boxLabelled(inquiryScreen, 'YEAR'), '26');
+    await settle(tester);
+    await press(tester, find.text('SHOW THE WHOLE YEAR'));
+    expect(find.text('SHOWING ACME IN 2026.'), findsOneWidget);
   });
 }
 

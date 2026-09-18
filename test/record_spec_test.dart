@@ -149,6 +149,31 @@ void main() {
         'ACME FROM 01 JANUARY 2026 TO 31 DECEMBER 2026',
       );
     });
+
+    test('a whole year is the same search as its first and last days', () {
+      final asYear = InquiryCriteria.forYear(ccode: 'acme', twoDigitYear: 26);
+      expect(asYear.ccode, 'ACME');
+      expect(asYear.fromDate, year2026.fromDate);
+      expect(asYear.toDate, year2026.toDate);
+      expect(asYear.matches(ccode: 'ACME', entryDate: '050826'), isTrue);
+      expect(asYear.matches(ccode: 'ACME', entryDate: '311225'), isFalse);
+    });
+
+    test('a whole year says which year rather than both dates', () {
+      expect(
+        InquiryCriteria.forYear(ccode: 'ACME', twoDigitYear: 26).describe(),
+        'ACME IN 2026',
+      );
+      // A single-digit year is still a two-digit date field.
+      final year06 = InquiryCriteria.forYear(ccode: 'ACME', twoDigitYear: 6);
+      expect(year06.fromDate, '010106');
+      expect(year06.describe(), 'ACME IN 2006');
+      // And the century window applies here too.
+      expect(
+        InquiryCriteria.forYear(ccode: 'ACME', twoDigitYear: 99).describe(),
+        'ACME IN 1999',
+      );
+    });
   });
 
   group('month inquiry', () {
