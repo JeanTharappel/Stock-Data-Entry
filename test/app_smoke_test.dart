@@ -92,7 +92,28 @@ void main() {
   }
 
   /// Taps something and lets the result land on screen.
+  ///
+  /// A page can be longer than the test surface, and a tap on something below
+  /// it never lands, so anything off the bottom is scrolled into view first -
+  /// which is what the reader does in a browser.
+  ///
+  /// Only when it is actually off-screen: scrolling to something already in
+  /// view can still move its scrollable a little and bring other widgets in
+  /// with it - the calendar's neighbouring month, for one, which carries the
+  /// same day numbers a test is about to tap.
   Future<void> press(WidgetTester tester, Finder finder) async {
+    if (finder.evaluate().length == 1) {
+      final surface = tester.view.physicalSize / tester.view.devicePixelRatio;
+      final rect = tester.getRect(finder);
+      if (rect.top < 0 || rect.bottom > surface.height) {
+        try {
+          await tester.ensureVisible(finder);
+          await tester.pump();
+        } on Object {
+          // Nothing to scroll, or it is as visible as it will get.
+        }
+      }
+    }
     await tester.tap(finder);
     await settle(tester);
   }
@@ -1074,6 +1095,43 @@ void main() {
       find.text('SHOWING ACME FROM 01 JANUARY 2026 TO 31 DECEMBER 2026.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('the two ways to search sit side by side when there is room', (
+    tester,
+  ) async {
+    await pumpApp(tester, density: BrutalDensity.compact);
+    tester.view.physicalSize = const Size(1900, 900);
+    await settle(tester);
+    await press(tester, find.text('INQUIRY'));
+
+    final year = tester.getTopLeft(find.text('A WHOLE YEAR'));
+    final dates = tester.getTopLeft(find.text('OR BETWEEN TWO DATES'));
+    // Level with each other, year on the left.
+    expect(year.dy, dates.dy);
+    expect(year.dx, lessThan(dates.dx));
+
+    // Both hang below the company code they belong to.
+    expect(
+      tester.getTopLeft(find.text('THEN CHOOSE ONE OF THESE TWO:')).dy,
+      lessThan(year.dy),
+    );
+  });
+
+  testWidgets('the two ways stack with the year on top when space is tight', (
+    tester,
+  ) async {
+    // BIG TEXT on a narrower page: two date boxes side by side would push the
+    // DAY / MONTH / YEAR boxes onto two lines, so they stack instead.
+    await pumpApp(tester);
+    tester.view.physicalSize = const Size(1200, 3000);
+    await settle(tester);
+    await press(tester, find.text('INQUIRY'));
+
+    final year = tester.getTopLeft(find.text('A WHOLE YEAR'));
+    final dates = tester.getTopLeft(find.text('OR BETWEEN TWO DATES'));
+    expect(year.dy, lessThan(dates.dy));
+    expect(year.dx, dates.dx);
   });
 
   testWidgets('the year search still needs a company code and a real year', (
