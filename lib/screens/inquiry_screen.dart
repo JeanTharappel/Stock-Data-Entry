@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/ddmmyy.dart';
 import '../core/inquiry.dart';
 import '../core/record_spec.dart';
 import '../core/validators.dart';
@@ -115,6 +116,33 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
     });
 
     return ccodeError == null && fromError == null && toError == null;
+  }
+
+  /// Whether each way of searching has enough in its boxes to be pressed.
+  ///
+  /// Only emptiness disables a button. A year of 13, or the 31st of February,
+  /// leaves it live so that pressing it explains what is wrong - a struck-out
+  /// button cannot say anything.
+  bool get _yearReady => _yearController.text.trim().isNotEmpty;
+
+  bool get _datesReady =>
+      !_fromController.isEmpty &&
+      !_toController.isEmpty &&
+      _fromController.dayText.isNotEmpty &&
+      _fromController.monthText.isNotEmpty &&
+      _fromController.yearText.isNotEmpty &&
+      _toController.dayText.isNotEmpty &&
+      _toController.monthText.isNotEmpty &&
+      _toController.yearText.isNotEmpty;
+
+  /// The year box in words, e.g. `2026`, or empty if it is not a year yet.
+  /// The same readback the date boxes have, for the same reason: nobody
+  /// should have to know that 99 means 1999 and 26 means 2026.
+  String get _yearInWords {
+    final value = _yearController.text.trim();
+    if (value.isEmpty || value.length > 2) return '';
+    final year = int.tryParse(value);
+    return year == null ? '' : '${expandYear(year)}';
   }
 
   void _revalidateIfSubmitted() {
@@ -331,52 +359,104 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
               ),
               BrutalGap(skin.sizes.gapLarge),
 
-              // The two ways to say which records. Each is boxed and they sit
-              // side by side where there is room, so both read as belonging
-              // to the company code above rather than following on from it.
-              // Whichever button is pressed decides which boxes are read, so
-              // there is no mode to set first and nothing is hidden.
-              Text('THEN CHOOSE ONE OF THESE TWO:', style: skin.text.bodyBold),
-              BrutalGap(skin.sizes.gapSmall),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final year = _buildYearWay(skin);
-                  final dates = _buildDatesWay(skin);
-                  // Side by side only while each box still has room for a
-                  // whole date row - three boxes and the gaps between them,
-                  // inside the box's own padding. Any narrower and the date
-                  // boxes would wrap onto two lines, which is harder to read
-                  // than the two ways stacked with the year on top.
-                  final datesNeed =
-                      skin.sizes.datePartWidth * 3 + skin.sizes.gap * 4;
-                  final sideBySide =
-                      constraints.maxWidth >= datesNeed * 2 + skin.sizes.gap;
-                  if (!sideBySide) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+              // Two ways to say which records, one under the other, both
+              // indented so they read as belonging to the company code above
+              // rather than following on from it. Whichever button is pressed
+              // decides which boxes are read, so there is no mode to set
+              // first and nothing is hidden from view.
+              Padding(
+                padding: EdgeInsets.only(left: skin.sizes.gapLarge),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    _WaySeparator(label: 'A WHOLE YEAR'),
+                    BrutalGap(skin.sizes.gapSmall),
+                    Wrap(
+                      spacing: skin.sizes.gap,
+                      runSpacing: skin.sizes.gap,
+                      crossAxisAlignment: WrapCrossAlignment.end,
                       children: <Widget>[
-                        year,
-                        BrutalGap(skin.sizes.gap),
-                        dates,
-                      ],
-                    );
-                  }
-                  // Both boxes take the same height, so the pair reads as one
-                  // strip rather than two blocks of different sizes.
-                  return IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        Expanded(child: year),
-                        SizedBox(width: skin.sizes.gap),
-                        Expanded(child: dates),
+                        SizedBox(
+                          width: skin.sizes.datePartWidth,
+                          child: BrutalTextField(
+                            label: 'YEAR',
+                            hint: 'E.G. 26',
+                            controller: _yearController,
+                            maxLength: 2,
+                            textAlign: TextAlign.center,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: <TextInputFormatter>[
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            onChanged: (_) => setState(() {
+                              // The readback and the button's own state both
+                              // follow what is in the box.
+                              _yearError = null;
+                            }),
+                            onSubmitted: (_) => _searchYear(),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 2),
+                          child: BrutalButton(
+                            label: 'SHOW THE WHOLE YEAR',
+                            icon: Icons.search,
+                            compact: skin.sizes.isCompact,
+                            onPressed: _yearReady ? _searchYear : null,
+                          ),
+                        ),
                       ],
                     ),
-                  );
-                },
-              ),
-              BrutalGap(skin.sizes.gapLarge),
+                    if (_yearInWords.isNotEmpty) ...<Widget>[
+                      BrutalGap(skin.sizes.gapSmall),
+                      _Readback('THIS YEAR IS: $_yearInWords'),
+                    ],
+                    if (_yearError != null) ...<Widget>[
+                      BrutalGap(skin.sizes.gapSmall),
+                      BrutalNotice(message: _yearError!),
+                    ],
+                    BrutalGap(skin.sizes.gapLarge),
 
+                    // One or the other, never both - said between the two
+                    // blocks, where it is read before either of them.
+                    const _OrDivider(),
+                    BrutalGap(skin.sizes.gapLarge),
+
+                    _WaySeparator(label: 'BETWEEN TWO DATES'),
+                    BrutalGap(skin.sizes.gapSmall),
+
+                    DdmmyyField(
+                      label: 'FROM DATE',
+                      controller: _fromController,
+                      errorText: _fromError,
+                      onChanged: _revalidateIfSubmitted,
+                    ),
+                    BrutalGap(skin.sizes.gapLarge),
+
+                    DdmmyyField(
+                      label: 'TO DATE',
+                      controller: _toController,
+                      errorText: _toError,
+                      onChanged: _revalidateIfSubmitted,
+                    ),
+                    BrutalGap(skin.sizes.gapLarge),
+
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: BrutalButton(
+                        label: 'SHOW BETWEEN THESE DATES',
+                        icon: Icons.search,
+                        compact: skin.sizes.isCompact,
+                        onPressed: _datesReady ? _search : null,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              BrutalGap(skin.sizes.gapSection),
+
+              // Not indented: this one empties the whole search, so it sits
+              // at the panel's own left edge with the company code.
               Align(
                 alignment: Alignment.centerLeft,
                 child: BrutalButton(
@@ -387,72 +467,6 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
               ),
             ],
           ),
-        ),
-      ],
-    );
-  }
-
-  /// The left-hand way: a year, and the button that searches it.
-  Widget _buildYearWay(BrutalSkinData skin) {
-    return _WayBox(
-      label: 'A WHOLE YEAR',
-      children: <Widget>[
-        SizedBox(
-          width: skin.sizes.datePartWidth,
-          child: BrutalTextField(
-            label: 'YEAR',
-            hint: 'E.G. 26',
-            controller: _yearController,
-            maxLength: 2,
-            textAlign: TextAlign.center,
-            keyboardType: TextInputType.number,
-            inputFormatters: <TextInputFormatter>[
-              FilteringTextInputFormatter.digitsOnly,
-            ],
-            onSubmitted: (_) => _searchYear(),
-          ),
-        ),
-        if (_yearError != null) ...<Widget>[
-          BrutalGap(skin.sizes.gapSmall),
-          BrutalNotice(message: _yearError!),
-        ],
-        BrutalGap(skin.sizes.gapLarge),
-        BrutalButton(
-          label: 'SHOW THE WHOLE YEAR',
-          icon: Icons.search,
-          expand: true,
-          compact: skin.sizes.isCompact,
-          onPressed: _searchYear,
-        ),
-      ],
-    );
-  }
-
-  /// The right-hand way: any two dates, and the button that searches them.
-  Widget _buildDatesWay(BrutalSkinData skin) {
-    return _WayBox(
-      label: 'OR BETWEEN TWO DATES',
-      children: <Widget>[
-        DdmmyyField(
-          label: 'FROM DATE',
-          controller: _fromController,
-          errorText: _fromError,
-          onChanged: _revalidateIfSubmitted,
-        ),
-        BrutalGap(skin.sizes.gapLarge),
-        DdmmyyField(
-          label: 'TO DATE',
-          controller: _toController,
-          errorText: _toError,
-          onChanged: _revalidateIfSubmitted,
-        ),
-        BrutalGap(skin.sizes.gapLarge),
-        BrutalButton(
-          label: 'SHOW BETWEEN THESE DATES',
-          icon: Icons.search,
-          expand: true,
-          compact: skin.sizes.isCompact,
-          onPressed: _search,
         ),
       ],
     );
@@ -619,41 +633,80 @@ class _InquiryScreenState extends ConsumerState<InquiryScreen> {
   };
 }
 
-/// One of the two ways to search, boxed with its name along the top.
+/// A heading inside a panel, marking one of the two ways to search.
 ///
-/// A thin outline rather than a panel border: it groups the boxes and their
-/// button without competing with the outline around the whole panel.
-class _WayBox extends StatelessWidget {
-  const _WayBox({required this.label, required this.children});
+/// A rule across the panel with its label at the left - enough to group the
+/// boxes under it without looking like another section of the page.
+class _WaySeparator extends StatelessWidget {
+  const _WaySeparator({required this.label});
 
   final String label;
-  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
     final skin = BrutalSkin.of(context);
-    return Container(
-      decoration: BoxDecoration(border: skin.border),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Container(
-            color: skin.colors.stripe,
-            padding: EdgeInsets.symmetric(
-              horizontal: skin.sizes.gap,
-              vertical: skin.sizes.gapSmall,
-            ),
-            child: Text(label, style: skin.text.fieldLabel),
-          ),
-          Container(height: skin.sizes.border, color: skin.colors.ink),
-          Padding(
-            padding: EdgeInsets.all(skin.sizes.gap),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: children,
-            ),
-          ),
-        ],
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: <Widget>[
+        Text(label, style: skin.text.fieldLabel),
+        SizedBox(width: skin.sizes.gapSmall),
+        Expanded(
+          child: Container(height: skin.sizes.border, color: skin.colors.ink),
+        ),
+      ],
+    );
+  }
+}
+
+/// The word OR on a rule, between the two ways of searching.
+///
+/// Said here rather than inside the second heading, so it is read before
+/// either set of boxes and the choice cannot be missed.
+class _OrDivider extends StatelessWidget {
+  const _OrDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = BrutalSkin.of(context);
+    Widget rule() => Expanded(
+      child: Container(height: skin.sizes.border, color: skin.colors.ink),
+    );
+
+    return Row(
+      children: <Widget>[
+        rule(),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: skin.sizes.gap),
+          child: Text('OR', style: skin.text.fieldLabel),
+        ),
+        rule(),
+      ],
+    );
+  }
+}
+
+/// A plain statement of what was typed, in the same block the date fields use
+/// for theirs - so both readbacks on this panel look like one another.
+class _Readback extends StatelessWidget {
+  const _Readback(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = BrutalSkin.of(context);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        decoration: BoxDecoration(
+          border: skin.border,
+          color: skin.colors.stripe,
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: skin.sizes.gap,
+          vertical: skin.sizes.gapSmall,
+        ),
+        child: Text(text, style: skin.text.bodyBold),
       ),
     );
   }

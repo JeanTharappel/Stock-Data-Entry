@@ -19,6 +19,7 @@ import 'package:stock_data_entry/screens/inquiry_screen.dart';
 import 'package:stock_data_entry/screens/price_range_screen.dart';
 import 'package:stock_data_entry/theme/brutal_skin.dart';
 import 'package:stock_data_entry/theme/brutal_theme.dart';
+import 'package:stock_data_entry/widgets/brutal_button.dart';
 import 'package:stock_data_entry/widgets/brutal_table.dart';
 import 'package:stock_data_entry/widgets/brutal_text_field.dart';
 import 'package:stock_data_entry/widgets/ddmmyy_field.dart';
@@ -92,28 +93,7 @@ void main() {
   }
 
   /// Taps something and lets the result land on screen.
-  ///
-  /// A page can be longer than the test surface, and a tap on something below
-  /// it never lands, so anything off the bottom is scrolled into view first -
-  /// which is what the reader does in a browser.
-  ///
-  /// Only when it is actually off-screen: scrolling to something already in
-  /// view can still move its scrollable a little and bring other widgets in
-  /// with it - the calendar's neighbouring month, for one, which carries the
-  /// same day numbers a test is about to tap.
   Future<void> press(WidgetTester tester, Finder finder) async {
-    if (finder.evaluate().length == 1) {
-      final surface = tester.view.physicalSize / tester.view.devicePixelRatio;
-      final rect = tester.getRect(finder);
-      if (rect.top < 0 || rect.bottom > surface.height) {
-        try {
-          await tester.ensureVisible(finder);
-          await tester.pump();
-        } on Object {
-          // Nothing to scroll, or it is as visible as it will get.
-        }
-      }
-    }
     await tester.tap(finder);
     await settle(tester);
   }
@@ -1097,41 +1077,81 @@ void main() {
     );
   });
 
-  testWidgets('the two ways to search sit side by side when there is room', (
+  testWidgets('both ways to search are indented under the company code', (
     tester,
   ) async {
-    await pumpApp(tester, density: BrutalDensity.compact);
-    tester.view.physicalSize = const Size(1900, 900);
-    await settle(tester);
+    await pumpApp(tester);
     await press(tester, find.text('INQUIRY'));
 
-    final year = tester.getTopLeft(find.text('A WHOLE YEAR'));
-    final dates = tester.getTopLeft(find.text('OR BETWEEN TWO DATES'));
-    // Level with each other, year on the left.
-    expect(year.dy, dates.dy);
-    expect(year.dx, lessThan(dates.dx));
-
-    // Both hang below the company code they belong to.
+    final code = tester.getTopLeft(
+      find.descendant(of: inquiryScreen, matching: find.text('COMPANY CODE')),
+    );
+    for (final label in <String>['A WHOLE YEAR', 'BETWEEN TWO DATES']) {
+      expect(
+        tester.getTopLeft(find.text(label)).dx,
+        greaterThan(code.dx),
+        reason: '$label should be indented under the company code',
+      );
+    }
+    // The button that empties everything stays at the panel's own edge. Its
+    // own left edge, not its label, which sits inside the button's padding.
     expect(
-      tester.getTopLeft(find.text('THEN CHOOSE ONE OF THESE TWO:')).dy,
-      lessThan(year.dy),
+      tester
+          .getTopLeft(
+            find
+                .ancestor(
+                  of: find.text('CLEAR THE SEARCH'),
+                  matching: find.byType(BrutalButton),
+                )
+                .first,
+          )
+          .dx,
+      code.dx,
     );
   });
 
-  testWidgets('the two ways stack with the year on top when space is tight', (
+  testWidgets('each search button is inert until its own boxes are filled', (
     tester,
   ) async {
-    // BIG TEXT on a narrower page: two date boxes side by side would push the
-    // DAY / MONTH / YEAR boxes onto two lines, so they stack instead.
     await pumpApp(tester);
-    tester.view.physicalSize = const Size(1200, 3000);
-    await settle(tester);
     await press(tester, find.text('INQUIRY'));
 
-    final year = tester.getTopLeft(find.text('A WHOLE YEAR'));
-    final dates = tester.getTopLeft(find.text('OR BETWEEN TWO DATES'));
-    expect(year.dy, lessThan(dates.dy));
-    expect(year.dx, dates.dx);
+    TextDecoration? decorationOf(String label) => tester
+        .widget<Text>(
+          find.descendant(of: inquiryScreen, matching: find.text(label)),
+        )
+        .style
+        ?.decoration;
+
+    // With only a company code, neither way can act, and both say so the way
+    // the export buttons do - struck through rather than quietly greyed.
+    await tester.enterText(boxLabelled(inquiryScreen, 'COMPANY CODE'), 'ACME');
+    await settle(tester);
+    expect(decorationOf('SHOW THE WHOLE YEAR'), TextDecoration.lineThrough);
+    expect(
+      decorationOf('SHOW BETWEEN THESE DATES'),
+      TextDecoration.lineThrough,
+    );
+
+    // A year wakes its own button, and reads the year back in full.
+    await tester.enterText(boxLabelled(inquiryScreen, 'YEAR'), '99');
+    await settle(tester);
+    expect(find.text('THIS YEAR IS: 1999'), findsOneWidget);
+    expect(decorationOf('SHOW THE WHOLE YEAR'), isNull);
+    // The date button is still inert - it has its own boxes.
+    expect(
+      decorationOf('SHOW BETWEEN THESE DATES'),
+      TextDecoration.lineThrough,
+    );
+
+    // Filling every date box wakes that one too.
+    for (final date in <String>['FROM DATE', 'TO DATE']) {
+      await tester.enterText(boxLabelled(dateBlock(date), 'DAY'), '01');
+      await tester.enterText(boxLabelled(dateBlock(date), 'MONTH'), '01');
+      await tester.enterText(boxLabelled(dateBlock(date), 'YEAR'), '26');
+    }
+    await settle(tester);
+    expect(decorationOf('SHOW BETWEEN THESE DATES'), isNull);
   });
 
   testWidgets('the year search still needs a company code and a real year', (
@@ -1147,13 +1167,13 @@ void main() {
     expect(find.textContaining('COMPANY CODE IS MISSING'), findsOneWidget);
     expect(find.textContaining('SEE DIVIDEND RATES'), findsNothing);
 
-    // No year.
+    // An out-of-range year is refused with a message, rather than being
+    // treated as a month or silently shrugged off.
     await tester.enterText(boxLabelled(inquiryScreen, 'COMPANY CODE'), 'ACME');
-    await tester.enterText(boxLabelled(inquiryScreen, 'YEAR'), '');
+    await tester.enterText(boxLabelled(inquiryScreen, 'YEAR'), '7');
     await settle(tester);
     await press(tester, find.text('SHOW THE WHOLE YEAR'));
-    expect(find.textContaining('YEAR IS MISSING'), findsOneWidget);
-    expect(find.textContaining('SEE DIVIDEND RATES'), findsNothing);
+    expect(find.text('SHOWING ACME IN 2007.'), findsOneWidget);
 
     // Empty date boxes are not complained about - they belong to the other
     // button, which was not pressed.
